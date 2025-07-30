@@ -514,23 +514,26 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             statusMessage.innerHTML = message;
         }
 
-        // NEW: Function to save a single message to Firestore
-        async function saveMessageToFirestore(chatType, role, text, htmlContent) {
+        // NEW: Function to save an artifact (learning path, quiz, or solution) to Firestore
+        async function saveArtifactToFirestore(title, type, rawContent, htmlContent, originalPrompt) {
             if (!currentUserUid || !db) {
-                console.warn("Không thể lưu tin nhắn: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
+                console.warn("Không thể lưu mục: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
                 return;
             }
             try {
-                await addDoc(collection(db, 'users', currentUserUid, 'chats', chatType, 'messages'), {
-                    role: role,
-                    text: text, // Raw text from user or AI
-                    htmlContent: htmlContent, // Rendered HTML for display
-                    timestamp: serverTimestamp() // Use server timestamp for consistent ordering
+                await addDoc(collection(db, 'users', currentUserUid, 'saved_artifacts'), {
+                    title: title,
+                    type: type,
+                    rawContent: rawContent,
+                    htmlContent: htmlContent,
+                    originalPrompt: originalPrompt,
+                    createdAt: serverTimestamp()
                 });
-                console.log(`Tin nhắn [${chatType}] đã lưu vào Firestore.`);
+                updateStatus('text-green-600', `"${title}" đã được lưu vào kho của bạn.`);
+                console.log("Mục đã lưu:", { title, type });
             } catch (e) {
-                console.error("Lỗi khi lưu tin nhắn vào Firestore:", e);
-                updateStatus('text-red-600', `Lỗi lưu tin nhắn: ${e.message}`);
+                console.error("Lỗi khi lưu mục vào Firestore:", e);
+                updateStatus('text-red-600', `Lỗi lưu mục: ${e.message}`);
             }
         }
 
@@ -552,29 +555,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             } catch (e) {
                 console.error("Lỗi khi lưu dữ liệu người dùng vào Firestore:", e);
                 updateStatus('text-red-600', `Lỗi lưu dữ liệu: ${e.message}`);
-            }
-        }
-
-        // NEW: Function to save an artifact (learning path or quiz) to Firestore
-        async function saveArtifactToFirestore(title, type, rawContent, htmlContent, originalPrompt) {
-            if (!currentUserUid || !db) {
-                updateStatus('text-red-600', "Không thể lưu mục: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
-                return;
-            }
-            try {
-                await addDoc(collection(db, 'users', currentUserUid, 'saved_artifacts'), {
-                    title: title,
-                    type: type,
-                    rawContent: rawContent,
-                    htmlContent: htmlContent,
-                    originalPrompt: originalPrompt,
-                    createdAt: serverTimestamp()
-                });
-                updateStatus('text-green-600', `"${title}" đã được lưu vào kho của bạn.`);
-                console.log("Mục đã lưu:", { title, type });
-            } catch (e) {
-                console.error("Lỗi khi lưu mục vào Firestore:", e);
-                updateStatus('text-red-600', `Lỗi lưu mục: ${e.message}`);
             }
         }
 
@@ -694,7 +674,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     itemDiv.classList.add('saved-item-entry');
                     itemDiv.innerHTML = `
                         <span class="title">${artifact.title}</span>
-                        <span class="type">${artifact.type === 'learning_path' ? 'Lộ trình' : (artifact.type === 'quiz' ? 'Bài tập' : 'Khác')}</span>
+                        <span class="type">${artifact.type === 'learning_path' ? 'Lộ trình' : (artifact.type === 'quiz' ? 'Bài tập' : (artifact.type === 'solution' ? 'Lời giải' : 'Khác'))}</span>
                     `;
                     itemDiv.addEventListener('click', () => displaySavedArtifact(artifact));
                     savedListContainer.appendChild(itemDiv);
@@ -776,38 +756,33 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             // This ensures currentContentContainerElement is correctly set before messages are appended.
             switchTab(currentActiveTab); 
 
-            // --- Load Chat Histories ---
+            // --- Load Chat Histories (ONLY for re-initializing Gemini chat sessions, not for UI display) ---
+            // The UI will be empty based on the user's request, only explicitly saved items will be shown.
             const loadedSolutionHistory = [];
             const loadedReviewHistory = [];
             
             try {
-                // Load Solution Chat History
+                // Load Solution Chat History (for model context only)
                 const solutionMessagesRef = collection(db, 'users', currentUserUid, 'chats', 'solution', 'messages');
                 const qSolution = query(solutionMessagesRef, orderBy('timestamp'));
                 const solutionQuerySnapshot = await getDocs(qSolution);
 
                 solutionQuerySnapshot.forEach(doc => {
                     const msg = doc.data();
-                    // Append message to UI without saving back to Firestore (false)
-                    appendMessage(msg.htmlContent, `${msg.role}-message`, false, false); // Pass false for saveToFirestore
-                    // Add to history for Gemini session initialization
                     loadedSolutionHistory.push({ role: msg.role, parts: [{ text: msg.text }] });
                 });
-                console.log("Lịch sử chat Lời giải đã tải:", loadedSolutionHistory);
+                console.log("Lịch sử chat Lời giải đã tải (cho context AI):", loadedSolutionHistory);
 
-                // Load Review Chat History
+                // Load Review Chat History (for model context only)
                 const reviewMessagesRef = collection(db, 'users', currentUserUid, 'chats', 'review', 'messages');
                 const qReview = query(reviewMessagesRef, orderBy('timestamp'));
                 const reviewQuerySnapshot = await getDocs(qReview);
 
                 reviewQuerySnapshot.forEach(doc => {
                     const msg = doc.data();
-                    // Append message to UI without saving back to Firestore (false)
-                    appendMessage(msg.htmlContent, `${msg.role}-message`, false, false); // Pass false for saveToFirestore
-                    // Add to history for Gemini session initialization
                     loadedReviewHistory.push({ role: msg.role, parts: [{ text: msg.text }] });
                 });
-                console.log("Lịch sử chat Ôn tập đã tải:", loadedReviewHistory);
+                console.log("Lịch sử chat Ôn tập đã tải (cho context AI):", loadedReviewHistory);
 
                 // Re-initialize Gemini chat sessions with loaded history
                 solutionChat = model.startChat({ history: loadedSolutionHistory });
@@ -819,7 +794,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     ]
                 });
 
-                // Re-apply completed topic styles after loading
+                // Re-apply completed topic styles after loading - this still makes sense as user progress
                 solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
                     const decodedPrompt = decodeURIComponent(link.dataset.prompt);
                     if (completedTopics.includes(decodedPrompt)) {
@@ -835,6 +810,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
 
                 // Add event listeners for interactive links and quizzes to the re-rendered content
+                // (These will be for newly generated content, not loaded history)
                 solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
                     link.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -952,7 +928,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
 
         // Modified appendMessage to optionally save to Firestore
-        function appendMessage(text, senderType, isLoading = false, saveToFirestore = true) {
+        function appendMessage(text, senderType, isLoading = false) { // Removed saveToFirestore parameter
             // Determine which placeholder to check based on currentContentContainerElement
             let placeholderEl = null;
             if (currentContentContainerElement === solutionResponseContainer && solutionPlaceholder) {
@@ -988,13 +964,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             
             currentContentContainerElement.appendChild(messageDiv);
             currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
-
-            if (!isLoading && saveToFirestore) {
-                // If this is a user message or final AI response, save it
-                const chatType = currentActiveTab; // 'solution' or 'review'
-                // The 'text' argument is the raw text, messageDiv.innerHTML is the rendered htmlContent
-                saveMessageToFirestore(chatType, senderType === 'user-message' ? 'user' : 'model', text, messageDiv.innerHTML);
-            }
             
             return messageDiv;
         }
@@ -1058,15 +1027,42 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     saveButton.classList.remove('bg-purple-600', 'hover:bg-purple-700');
                     saveButton.classList.add('bg-gray-400');
                 });
-                // Find the existing .chat-message div for the AI's response
-                // aiMessageDiv.appendChild(saveButton); // Append to the message div
-                // Better to add it after the message div, centered or aligned
                 const container = aiMessageDiv.parentNode;
                 const saveButtonWrapper = document.createElement('div');
                 saveButtonWrapper.classList.add('flex', 'justify-end', 'w-full', 'pr-2'); // Align right
                 container.insertBefore(saveButtonWrapper, aiMessageDiv.nextSibling); // Insert after the message
                 saveButtonWrapper.appendChild(saveButton);
             }
+        }
+
+        // NEW: Function to add a save button for solutions in the "Lời giải" tab
+        function addSaveSolutionButton(aiMessageDiv, rawResponse, originalPrompt) {
+            const saveButton = document.createElement('button');
+            saveButton.classList.add(
+                'bg-purple-600', 'hover:bg-purple-700', 'text-white', 'font-semibold',
+                'py-1', 'px-2', 'rounded-md', 'shadow-sm', 'text-sm', 'mt-2', 'mr-2', 'ml-auto' // float right
+            );
+            saveButton.textContent = `Lưu lời giải này`;
+            saveButton.addEventListener('click', async () => {
+                saveButton.disabled = true;
+                saveButton.textContent = 'Đang lưu...';
+                const solutionTitle = originalPrompt ? `Lời giải cho "${originalPrompt.substring(0, 40)}${originalPrompt.length > 40 ? '...' : ''}"` : `Lời giải (${new Date().toLocaleDateString()})`;
+                await saveArtifactToFirestore(
+                    solutionTitle,
+                    'solution', // Type for saved solution
+                    rawResponse,
+                    aiMessageDiv.innerHTML,
+                    originalPrompt
+                );
+                saveButton.textContent = 'Đã lưu!';
+                saveButton.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                saveButton.classList.add('bg-gray-400');
+            });
+            const container = aiMessageDiv.parentNode;
+            const saveButtonWrapper = document.createElement('div');
+            saveButtonWrapper.classList.add('flex', 'justify-end', 'w-full', 'pr-2'); // Align right
+            container.insertBefore(saveButtonWrapper, aiMessageDiv.nextSibling); // Insert after the message
+            saveButtonWrapper.appendChild(saveButton);
         }
 
 
@@ -1259,8 +1255,8 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             const userMessageDiv = appendMessage(promptText, 'user-message', false); // User message is not loading
             lastUserMessageElement = userMessageDiv; // Store the reference to the user's message
 
-            // Save user message to Firestore immediately
-            saveMessageToFirestore(currentActiveTab, 'user', promptText, userMessageDiv.innerHTML);
+            // NO LONGER AUTOMATICALLY SAVE USER MESSAGES TO FIRESTORE
+            // saveMessageToFirestore(currentActiveTab, 'user', promptText, userMessageDiv.innerHTML);
 
 
             if (!promptOverride) {
@@ -1323,12 +1319,14 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Full response text:", fullResponseBuffer);
 
-                // NEW: Save AI response to Firestore after full response is processed
-                saveMessageToFirestore(currentActiveTab, 'model', fullResponseBuffer, htmlContent);
+                // NO LONGER AUTOMATICALLY SAVE AI MESSAGES TO FIRESTORE
+                // saveMessageToFirestore(currentActiveTab, 'model', fullResponseBuffer, htmlContent);
 
-                // NEW: Add save artifact button if applicable (only for review tab)
+                // NEW: Add save artifact button if applicable
                 if (currentActiveTab === 'review') {
                     addSaveArtifactButton(aiLoadingMessageDiv, fullResponseBuffer, promptText);
+                } else if (currentActiveTab === 'solution') { // NEW: Add save button for solutions
+                    addSaveSolutionButton(aiLoadingMessageDiv, fullResponseBuffer, promptText);
                 }
 
 
