@@ -178,7 +178,7 @@
 </head>
 <body class="flex flex-col min-h-screen items-center p-5">
     <h1 class="text-4xl font-extrabold text-blue-700 mb-4 text-center">Ứng dụng AI Toán học</h1>
-    <h2 class="text-lg text-gray-600 mb-8 text-center">(Sử dụng Gemini 2.5 Flash và MathJax)</h2>
+    <h2 class="text-lg text-gray-600 mb-8 text-center">(Sử dụng Gemini 1.5 Flash và MathJax)</h2>
 
     <!-- Main Chat Content Area -->
     <div class="flex-grow w-full max-w-7xl flex flex-col">
@@ -303,36 +303,36 @@
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
-        const QUIZ_BLOCK_REGEX = /```quiz([\s\S]*?)```/g;
-        // Regex for [Text]{"prompt":"..."} or [Text] (basic link)
-        // Updated to use negative lookbehind for robustness
+        // ***FIX 1: Updated Regex to be more flexible***
+        const QUIZ_BLOCK_REGEX = /```(?:quiz|json)\n([\s\S]*?)\n```/g;
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
         const BASIC_LINK_REGEX = /\[(.*?)\]/g;
 
-        // SYSTEM PROMPT cho chế độ Ôn tập
-const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
+        // ***FIX 3: Updated System Prompt for clarity***
+        const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
 **Quy tắc phản hồi chính:**
-1.  **Lộ trình ôn tập:** Khi người dùng yêu cầu lộ trình ôn tập cho một chủ đề/chương cụ thể, bạn phải trả về một danh sách các mục ôn tập dưới dạng Markdown. **Cực kỳ quan trọng: Mỗi mục trong danh sách này phải là một liên kết tương tác với một lời nhắc (prompt) ẩn đi để yêu cầu giải thích lý thuyết chi tiết về mục đó.**
-    *   **Định dạng liên kết tương tác PHẢI là:** \`[Tên mục ôn tập]{"prompt":"Giải thích chi tiết về [Tên mục ôn tập] bao gồm định nghĩa, công thức, tính chất và các ví dụ minh họa."}\`
-    *   **Các ví dụ minh họa về liên kết lý thuyết trong lộ trình (TUÂN THỦ CÁC VÍ DỤ NÀY):**
-        *   \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
-        *   \`[Đạo hàm hàm hợp]{"prompt":"Trình bày lý thuyết về đạo hàm hàm hợp một cách đầy đủ và dễ hiểu."}\`
-        *   \`[Cực trị hàm số]{"prompt":"Giải thích lý thuyết về cực trị hàm số, bao gồm các điều kiện cần và đủ."}\`
-        *   \`[Tiệm cận đồ thị]{"prompt":"Cung cấp lý thuyết chi tiết về các dạng tiệm cận của đồ thị hàm số (đứng, ngang, xiên)."}\`
-        *   \`[Tích phân xác định]{"prompt":"Giải thích định nghĩa, tính chất và phương pháp tính tích phân xác định."}\`
-        *   \`[Ứng dụng tích phân vào hình học]{"prompt":"Trình bày lý thuyết về ứng dụng tích phân để tính diện tích hình phẳng và thể tích vật thể."}\`
-        *   \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
-        *   \`[Phương trình vi phân]{"prompt":"Cung cấp lý thuyết về phương trình vi phân cấp 1 và phương pháp giải."}\`
-2.  **Tạo bài tập/quiz (Tùy chọn):** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn có thể trả về một khối quiz dưới dạng JSON.
-    *   **Định dạng JSON Quiz:** Tất cả các khối JSON quiz phải được bao bọc trong cú pháp khối mã Markdown đặc biệt: \`\`\`quiz...json...\`\`\`
-    *   **Các loại quiz hỗ trợ (ĐẢM BẢO SỬ DỤNG HẾT CÁC LOẠI NÀY KHI PHÙ HỢP):**
-        *   **multiple_choice:** \`{"type": "multiple_choice", "title": "...", "question": "...", "options": ["...", "...", "..."], "answer": "...", "explanation": "..."}\`
-        *   **fill_in_the_blank:** \`{"type": "fill_in_the_blank", "title": "...", "question": "...", "answer": "...", "explanation": "..."}\`
-        *   **short_answer:** \`{"type": "short_answer", "title": "...", "question": "...", "answer": "...", "explanation": "..."}\`
-        *   **flashcard:** \`{"type": "flashcard", "title": "...", "front": "...", "back": "..."}\`
-    *   **Quan trọng:** Các giá trị chuỗi bên trong JSON (question, options, answer, explanation, front, back) phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, LaTeX hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON (ví dụ: không có dấu \`,\*,_,$,#, v.v. TRONG NỘI DUNG CHUỖI). Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la hoặc dấu ngoặc vuông LaTeX.
-3.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối lý thuyết hoặc quiz.
+1.  **Lộ trình ôn tập:** Khi người dùng yêu cầu lộ trình ôn tập, bạn phải trả về một danh sách các mục ôn tập dưới dạng Markdown. **Cực kỳ quan trọng: Mỗi mục trong danh sách này phải là một liên kết tương tác với một lời nhắc (prompt) ẩn đi để yêu cầu giải thích lý thuyết chi tiết về mục đó.**
+    * **Định dạng liên kết tương tác PHẢI là:** \`[Tên mục ôn tập]{"prompt":"Giải thích chi tiết về [Tên mục ôn tập] bao gồm định nghĩa, công thức, tính chất và các ví dụ minh họa."}\`
+    * **Ví dụ về liên kết lý thuyết (TUÂN THỦ NGHIÊM NGẶT):**
+        * \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
+        * \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
+2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown.
+    * **Định dạng khối mã PHẢI là:** Khối mã PHẢI bắt đầu bằng \`\`\`quiz trên một dòng riêng và kết thúc bằng \`\`\` trên một dòng riêng. TOÀN BỘ nội dung JSON phải nằm giữa hai dòng này.
+    * **Ví dụ định dạng đúng (TUÂN THỦ NGHIÊM NGẶT):**
+        \`\`\`quiz
+        {
+            "type": "multiple_choice",
+            "title": "Câu hỏi về Đạo hàm",
+            "question": "Đạo hàm của hàm số y = x^3 là gì?",
+            "options": ["3x^2", "x^2", "3x"],
+            "answer": "3x^2",
+            "explanation": "Áp dụng công thức (x^n)' = n*x^(n-1), ta có (x^3)' = 3*x^(3-1) = 3x^2."
+        }
+        \`\`\`
+    * **Các loại quiz hỗ trợ:** "multiple_choice", "fill_in_the_blank", "short_answer", "flashcard".
+    * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON. Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la.
+3.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối.
 4.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
 
 Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải nghiệm tương tác liền mạch cho người dùng.
@@ -349,29 +349,20 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
-            model = getGenerativeModel(ai, { model: "gemini-2.5-flash-preview-05-20" });
-            console.log("Generative Model instance created with model 'gemini-2.5-flash-preview-05-20'!");
+            model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+            console.log("Generative Model instance created with model 'gemini-1.5-flash-latest'!");
             
-            // Initialize solution chat without specific history (general math problem solving)
             solutionChat = model.startChat(); 
             console.log("Solution chat session started!");
 
-            // Initialize review chat with system prompt for learning mode
             reviewChat = model.startChat({
                 history: [
-                    {
-                        role: "user",
-                        parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] // System prompt as initial user message
-                    },
-                    {
-                        role: "model",
-                        parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] // AI confirmation
-                    }
+                    { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
+                    { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] }
                 ]
             });
             console.log("Review chat session started with learning mode system prompt!");
             
-            // Set initial active session and container
             currentChatSession = solutionChat;
             currentContentContainerElement = solutionResponseContainer;
             
@@ -381,7 +372,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             updateStatus('text-red-600', `Lỗi khởi tạo AI Model: ${e.message}.<br>Kiểm tra Console (F12) và đảm bảo Gemini API đã được kích hoạt cho dự án của bạn.`);
         }
 
-        // Helper function to create and append a message element
         function appendMessage(text, senderType, isLoading = false) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('chat-message', senderType);
@@ -393,22 +383,15 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 messageDiv.innerHTML = text;
             }
             
-            // Append to the currently active content container
             currentContentContainerElement.appendChild(messageDiv);
-            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight; // Auto-scroll to bottom
-            return messageDiv; // Return the created message div for potential updates
+            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
+            return messageDiv;
         }
 
-        /**
-         * Extracts raw quiz JSON blocks (```quiz...```) from the text,
-         * replaces them with placeholders, and returns the cleaned text
-         * along with the extracted JSON blocks.
-         * @param {string} text The raw text from AI response.
-         * @returns {{cleanedText: string, extractedQuizzes: Array<string>}}
-         */
         function extractAndReplaceQuizBlocks(text) {
             const extractedQuizzes = [];
             let quizIndex = 0;
+            // Use the updated, more flexible regex
             const cleanedText = text.replace(QUIZ_BLOCK_REGEX, (match, jsonContent) => {
                 extractedQuizzes.push(jsonContent.trim());
                 return `${QUIZ_PLACEHOLDER_PREFIX}${quizIndex++}`;
@@ -416,21 +399,9 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return { cleanedText, extractedQuizzes };
         }
 
-        /**
-         * Preprocesses the text to convert custom interactive link patterns
-         * into clickable HTML spans.
-         * Pattern: [Link Text]{"prompt":"Optional prompt to send to AI"} or [Link Text]
-         * @param {string} text The text to preprocess.
-         * @returns {string} The processed HTML string.
-         */
         function preprocessText(text) {
             let processedText = text;
-
-            // Process specific interactive links: [Text]{"prompt":"..."}
-            // Uses a lookbehind assertion to ensure it's not part of a markdown link [text](url)
-            // or an image ![text](url)
             processedText = processedText.replace(INTERACTIVE_LINK_REGEX, (match, linkText, promptValue) => {
-                // If a promptValue is present, encode it for data-attribute
                 const decodedPrompt = promptValue ? decodeURIComponent(promptValue) : '';
                 const isCompleted = completedTopics.includes(decodedPrompt);
                 const completedClass = isCompleted ? ' completed-topic' : '';
@@ -438,95 +409,81 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 const dataAttribute = promptValue ? `data-prompt="${encodeURIComponent(promptValue)}"` : '';
                 return `<span class="interactive-link${completedClass}" ${dataAttribute}>${linkText}</span>`;
             });
-            
-            // For now, simple [text] links are handled by marked.js (as standard Markdown links).
-            // If we need custom behavior for [text] without prompt, we'd add another regex here.
-
             return processedText;
         }
 
+        // ***FIX 2: Enhanced cleanJSON function***
         /**
          * Attempts to clean a raw JSON string to make it parsable.
-         * This is a simplified version and may need more robust handling
-         * for complex edge cases.
+         * Handles common AI-generated errors like trailing commas.
          * @param {string} jsonString The raw JSON string.
          * @returns {string} The cleaned JSON string.
          */
         function cleanJSON(jsonString) {
-            // Remove common issues:
-            // 1. Remove newlines and tabs within content, but keep structure newlines
-            let cleaned = jsonString.replace(/[\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-            // 2. Remove problematic characters that often appear from AI outputs
-            cleaned = cleaned.replace(/[“”‘’]/g, '"'); // Replace smart quotes with straight quotes
-            cleaned = cleaned.replace(/\\(?!["\\/bfnrtu])/g, ''); // Remove invalid backslashes (keep valid ones)
-            // 3. Ensure proper quotes for keys/values if AI sometimes misses them (complex, usually better with system prompt)
-            // For simple cases, replace any leading/trailing spaces for robustness before parsing.
+            let cleaned = jsonString.trim();
+
+            // 1. Remove comments (if any) - not common but good practice
+            cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+
+            // 2. Replace smart quotes with straight quotes
+            cleaned = cleaned.replace(/[“”‘’]/g, '"');
+            
+            // 3. Remove trailing commas from objects and arrays
+            // Matches a comma that is followed by optional whitespace and then a } or ]
+            cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
+
             return cleaned;
         }
 
-        /**
-         * Renders a single quiz JSON object into its HTML representation.
-         * This is a placeholder and needs full implementation for each quiz type.
-         * @param {object} quizJson Parsed quiz JSON object.
-         * @returns {string} HTML string for the quiz.
-         */
         function renderQuiz(quizJson) {
             if (!quizJson || !quizJson.type) {
-                return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Error: Invalid quiz JSON.</div>`;
+                return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi: JSON của bài tập không hợp lệ.</div>`;
             }
             let html = `<div class="quiz-block border border-blue-200 rounded-lg p-4 my-3 bg-blue-50">`;
-            html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Quiz'}</p>`;
+            html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Bài tập'}</p>`;
             switch (quizJson.type) {
                 case 'multiple_choice':
-                    html += `<p>${quizJson.question}</p>`;
+                    html += `<p class="mb-2">${quizJson.question}</p>`;
                     if (quizJson.options && Array.isArray(quizJson.options)) {
-                        html += `<ul class="list-disc ml-5 mt-2">`;
+                        html += `<div class="space-y-2">`;
                         quizJson.options.forEach(opt => {
-                            html += `<li>${opt}</li>`;
+                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq" class="mr-2">${opt}</label>`;
                         });
-                        html += `</ul>`;
+                        html += `</div>`;
                     }
-                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'fill_in_the_blank':
-                    html += `<p>${quizJson.question.replace(/__+/g, '_______')}</p>`;
-                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    html += `<p>${quizJson.question.replace(/__+/g, '<input type="text" class="border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent">')}</p>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'short_answer':
-                    html += `<p>${quizJson.question}</p>`;
-                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    html += `<p>${quizJson.question}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'flashcard':
-                    html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center">
-                                <p class="text-lg font-semibold">${quizJson.front}</p>
-                                <button class="mt-3 bg-gray-300 text-gray-800 px-3 py-1 rounded-md text-sm">Lật thẻ</button>
-                                <p class="text-gray-600 mt-2 hidden">${quizJson.back}</p>
-                            </div>`;
+                    html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center cursor-pointer">
+                                <div class="front"><p class="text-lg font-semibold">${quizJson.front}</p></div>
+                                <div class="back hidden"><p class="text-gray-700">${quizJson.back}</p></div>
+                             </div>`;
                     break;
                 default:
-                    html += `<p>Unsupported quiz type: ${quizJson.type}</p>`;
+                    html += `<p>Loại bài tập không được hỗ trợ: ${quizJson.type}</p>`;
             }
             html += `</div>`;
             return html;
         }
 
-        /**
-         * Inserts the rendered quiz HTML back into the main content
-         * at the positions of their placeholders.
-         * @param {string} htmlContent The HTML content with placeholders.
-         * @param {Array<string>} extractedQuizzes Raw JSON strings of quizzes.
-         * @returns {string} HTML content with quizzes rendered.
-         */
         function insertRenderedQuizzes(htmlContent, extractedQuizzes) {
             let finalHtml = htmlContent;
             extractedQuizzes.forEach((quizRaw, index) => {
                 const placeholder = `${QUIZ_PLACEHOLDER_PREFIX}${index}`;
-                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; // Default error message
+                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; 
 
                 try {
                     const cleanedQuizRaw = cleanJSON(quizRaw);
                     const quizJson = JSON.parse(cleanedQuizRaw);
-                    quizHtml = renderQuiz(quizJson); // Render the quiz
+                    quizHtml = renderQuiz(quizJson);
                 } catch (e) {
                     console.error(`Error parsing or rendering quiz ${index}:`, e, "Raw JSON:", quizRaw);
                 }
@@ -534,12 +491,29 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             });
             return finalHtml;
         }
+        
+        function addQuizEventListeners(container) {
+            // Event listener for "Xem đáp án" buttons
+            container.querySelectorAll('.quiz-block button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const answerParagraph = e.target.nextElementSibling;
+                    if (answerParagraph) {
+                        answerParagraph.classList.toggle('hidden');
+                        e.target.textContent = answerParagraph.classList.contains('hidden') ? 'Xem đáp án' : 'Ẩn đáp án';
+                    }
+                });
+            });
 
-        /**
-         * Handles the click event for learning-mode interactive links.
-         * Marks the topic as completed and sends a new prompt to AI.
-         * @param {HTMLElement} linkElement The clicked span.interactive-link element.
-         */
+            // Event listener for flashcards
+            container.querySelectorAll('.flashcard').forEach(card => {
+                card.addEventListener('click', () => {
+                    card.querySelector('.front').classList.toggle('hidden');
+                    card.querySelector('.back').classList.toggle('hidden');
+                });
+            });
+        }
+
+
         async function handleLearningPromptClick(linkElement) {
             const dataPrompt = linkElement.dataset.prompt;
             if (!dataPrompt) {
@@ -549,23 +523,17 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
             const decodedPrompt = decodeURIComponent(dataPrompt);
 
-            // Mark as completed and update UI
             if (!completedTopics.includes(decodedPrompt)) {
                 completedTopics.push(decodedPrompt);
                 linkElement.classList.add('completed-topic');
-                // You would typically save this to a persistent storage (e.g., Firebase, Local Storage) here.
-                // For this single-file MVP, it's session-only.
-                console.log("Completed topics:", completedTopics);
             }
 
-            // Send the prompt to AI
             await callGeminiAPI(decodedPrompt);
         }
 
-        // Hàm gọi API Gemini và xử lý phản hồi
         async function callGeminiAPI(promptOverride = null) {
             if (!model || !currentChatSession) {
-                updateStatus('text-red-600', "Mô hình AI hoặc phiên trò chuyện chưa được khởi tạo. Vui lòng kiểm tra console để biết lỗi.");
+                updateStatus('text-red-600', "Mô hình AI hoặc phiên trò chuyện chưa được khởi tạo.");
                 return;
             }
 
@@ -575,89 +543,59 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 return;
             }
 
-            // --- Start Loading State ---
             updateStatus('text-yellow-600', "Đang gửi yêu cầu đến Gemini...");
             
-            // Hide the placeholder of the active tab
-            if (currentActiveTab === 'solution' && !solutionPlaceholder.classList.contains('hidden')) {
-                solutionPlaceholder.classList.add('hidden');
-            } else if (currentActiveTab === 'review' && !reviewPlaceholder.classList.contains('hidden')) {
-                reviewPlaceholder.classList.add('hidden');
-            }
+            if (currentActiveTab === 'solution') solutionPlaceholder.classList.add('hidden');
+            else reviewPlaceholder.classList.add('hidden');
 
-            // Append user's message
             appendMessage(promptText, 'user-message');
-            if (!promptOverride) { // Only clear input if not an internal override
+            if (!promptOverride) {
                 promptInput.value = ''; 
             }
 
-            // Append AI's loading message placeholder
             const aiLoadingMessageDiv = appendMessage('', 'ai-message', true);
 
             buttonText.textContent = 'Đang gửi...';
             buttonSpinner.classList.remove('hidden');
             sendPromptButton.disabled = true;
-            // --- End Loading State ---
 
             try {
                 const result = await currentChatSession.sendMessage(promptText);
                 const response = result.response;
                 const text = response.text();
 
-                // Step 1: Extract quiz blocks
                 const { cleanedText, extractedQuizzes } = extractAndReplaceQuizBlocks(text);
-
-                // Step 2: Preprocess custom interactive links (now checks for completed status)
                 const preprocessedText = preprocessText(cleanedText);
-
-                // Step 3: Convert Markdown to HTML
                 let htmlContent = marked.parse(preprocessedText); 
-
-                // Step 4: Insert rendered quizzes back into HTML
                 htmlContent = insertRenderedQuizzes(htmlContent, extractedQuizzes);
 
-                // Update the AI's loading message div with actual content
                 aiLoadingMessageDiv.innerHTML = htmlContent;
                 if (aiLoadingMessageDiv.spinner) {
                     aiLoadingMessageDiv.spinner.remove();
                 }
 
-                // Yêu cầu MathJax xử lý nội dung mới để render các công thức toán học
                 if (typeof MathJax !== 'undefined') {
                     await MathJax.typesetPromise([aiLoadingMessageDiv]);
                 } else {
-                    console.warn("MathJax chưa được tải hoặc không khả dụng.");
+                    console.warn("MathJax is not available.");
                 }
 
-                // Attach event listeners to interactive links
                 aiLoadingMessageDiv.querySelectorAll('.interactive-link').forEach(link => {
                     link.addEventListener('click', (e) => {
-                        e.stopPropagation(); // Prevent event from bubbling up to parent handlers if any
+                        e.stopPropagation();
                         handleLearningPromptClick(e.currentTarget);
                     });
                 });
                 
-                // Add event listeners for flashcard flip (example)
-                aiLoadingMessageDiv.querySelectorAll('.flashcard button').forEach(button => {
-                    button.addEventListener('click', (e) => {
-                        const flashcard = e.target.closest('.flashcard');
-                        const backContent = flashcard.querySelector('.text-gray-600');
-                        if (backContent) {
-                            backContent.classList.toggle('hidden');
-                            e.target.textContent = backContent.classList.contains('hidden') ? 'Lật thẻ' : 'Ẩn đáp án';
-                        }
-                    });
-                });
+                addQuizEventListeners(aiLoadingMessageDiv);
 
-
-                // --- End Loading & Show Content State ---
                 currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Response text:", text);
 
             } catch (error) {
                 console.error("Lỗi khi gọi Gemini API:", error);
-                aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12) để biết thêm chi tiết.</p>`;
+                aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12).</p>`;
                 if (aiLoadingMessageDiv.spinner) {
                     aiLoadingMessageDiv.spinner.remove();
                 }
@@ -671,21 +609,17 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             }
         }
 
-        // Tab switching function
         function switchTab(tabName) {
             currentActiveTab = tabName;
 
-            // Hide all content containers
             solutionContent.classList.add('hidden');
             reviewContent.classList.add('hidden');
 
-            // Deactivate all tab buttons
             solutionTabBtn.classList.remove('text-blue-600', 'border-blue-600');
             solutionTabBtn.classList.add('text-gray-600', 'border-transparent');
             reviewTabBtn.classList.remove('text-blue-600', 'border-blue-600');
             reviewTabBtn.classList.add('text-gray-600', 'border-transparent');
 
-            // Show selected tab content and activate button
             if (tabName === 'solution') {
                 solutionContent.classList.remove('hidden');
                 solutionTabBtn.classList.add('text-blue-600', 'border-blue-600');
@@ -700,12 +634,10 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 currentContentContainerElement = reviewResponseContainer;
             }
             
-            // Adjust layout after tab switch to ensure correct padding for footer
             adjustLayout();
-            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight; // Scroll to bottom of new tab
+            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
         }
 
-        // Gán sự kiện click cho nút Gửi
         if (sendPromptButton) {
             sendPromptButton.addEventListener("click", () => callGeminiAPI(null));
             promptInput.addEventListener("keydown", (event) => {
@@ -719,7 +651,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             updateStatus('text-red-600', "Không tìm thấy nút gửi. Lỗi HTML?");
         }
 
-        // Gán sự kiện click cho nút tab
         if (solutionTabBtn) {
             solutionTabBtn.addEventListener("click", () => switchTab('solution'));
         }
@@ -727,27 +658,21 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             reviewTabBtn.addEventListener("click", () => switchTab('review'));
         }
 
-        // --- Layout Adjustment and Back to Top Button Logic ---
         function adjustLayout() {
             const footerHeight = chatInputFooter.offsetHeight;
-            // Add padding to the scrollable chat container to prevent content from being hidden by the fixed footer
-            // Use the currently active content container
             solutionResponseContainer.style.paddingBottom = `${footerHeight + 20}px`; 
             reviewResponseContainer.style.paddingBottom = `${footerHeight + 20}px`;
-
-            // Position the back to top button above the footer
             backToTopBtn.style.bottom = `${footerHeight + 20}px`;
         }
 
         window.addEventListener('load', () => {
-            adjustLayout(); // Initial layout adjustment
-            switchTab('solution'); // Ensure "Lời giải" tab is active on load
+            adjustLayout();
+            switchTab('solution');
         });
-        window.addEventListener('resize', adjustLayout); // Re-adjust on window resize
+        window.addEventListener('resize', adjustLayout);
 
         window.addEventListener('scroll', () => {
-            // Show/hide back to top button based on scroll position
-            if (window.pageYOffset > window.innerHeight / 2) { // Show if scrolled down past half viewport height
+            if (window.pageYOffset > window.innerHeight / 2) {
                 backToTopBtn.classList.add('show');
             } else {
                 backToTopBtn.classList.remove('show');
@@ -757,10 +682,9 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         backToTopBtn.addEventListener('click', () => {
             window.scrollTo({
                 top: 0,
-                behavior: 'smooth' // Smooth scroll to top of the page
+                behavior: 'smooth'
             });
         });
-        // --- End Layout Adjustment and Back to Top Button Logic ---
     </script>
 </body>
 </html>
