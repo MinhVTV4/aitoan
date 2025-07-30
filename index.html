@@ -166,19 +166,22 @@
     <!-- Fixed Input Footer -->
     <div id="chatInputFooter" 
          class="fixed bottom-0 left-0 right-0 w-full bg-white p-4 shadow-xl z-40">
-        <div class="max-w-7xl mx-auto flex flex-col space-y-4">
-            <h3 class="text-xl font-semibold text-gray-800 hidden md:block">Nhập yêu cầu của bạn</h3>
-            <textarea id="promptInput" rows="4"
-                      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out text-gray-800 resize-y"
-                      placeholder="Ví dụ: Giải tích phân của $x^2$ từ 0 đến 1. Trình bày lời giải chi tiết theo từng bước, mỗi bước có giải thích và sử dụng LaTeX cho tất cả các công thức toán học. **Hãy sử dụng $$...$$ cho các công thức toán học lớn trên dòng riêng, và $...$ cho công thức trong văn bản.**"
-            ></textarea>
-            <button id="sendPromptButton"
-                    class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out text-lg font-semibold flex items-center justify-center"
-            >
-                <span id="buttonText">Gửi yêu cầu tới Gemini</span>
-                <div id="buttonSpinner" class="spinner ml-2 hidden"></div>
-            </button>
-            <p id="statusMessage" class="status-message text-sm text-center"></p>
+        <div class="max-w-7xl mx-auto">
+            <!-- Input and Button Row -->
+            <div class="flex items-end space-x-2">
+                <textarea id="promptInput" rows="1"
+                          class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out text-gray-800 resize-y"
+                          placeholder="Nhập yêu cầu của bạn..."
+                ></textarea>
+                <button id="sendPromptButton"
+                        class="bg-blue-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out text-lg font-semibold flex items-center justify-center h-fit"
+                >
+                    <span id="buttonText">Gửi</span>
+                    <div id="buttonSpinner" class="spinner ml-2 hidden"></div>
+                </button>
+            </div>
+            <!-- Status Message (below the input/button row) -->
+            <p id="statusMessage" class="status-message text-sm text-center mt-2"></p>
         </div>
     </div>
 
@@ -339,7 +342,7 @@
                 chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom
                 updateStatus('text-red-600', `Lỗi khi gọi Gemini API: ${error.message}.`);
             } finally {
-                buttonText.textContent = 'Gửi yêu cầu tới Gemini';
+                buttonText.textContent = 'Gửi'; // Changed back to "Gửi"
                 buttonSpinner.classList.add('hidden');
                 sendPromptButton.disabled = false;
                 promptInput.focus(); // Keep focus on input for continued conversation
@@ -394,3 +397,4 @@
     </script>
 </body>
 </html>
+```
