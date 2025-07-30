@@ -15,7 +15,6 @@
                 processEscapes: true, // Allows using \$ for a literal dollar sign
                 processEnvironments: true, // Enables LaTeX environments like \begin{align}
             },
-            // The problematic 'options' block has been completely removed.
         };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -171,9 +170,6 @@
             color: #60a5fa; /* Muted blue */
             border-color: #93c5fd; /* Muted border blue */
         }
-        .interactive-link.completed-topic:hover {
-            background-color: #bfdbfe; /* Still hover effect, but from a muted base */
-        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen items-center p-5">
@@ -303,12 +299,10 @@
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
-        // ***FIX 1: Updated Regex to be more flexible***
         const QUIZ_BLOCK_REGEX = /```(?:quiz|json)\n([\s\S]*?)\n```/g;
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
         const BASIC_LINK_REGEX = /\[(.*?)\]/g;
 
-        // ***FIX 3: Updated System Prompt for clarity***
         const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
 **Quy tắc phản hồi chính:**
@@ -317,9 +311,9 @@
     * **Ví dụ về liên kết lý thuyết (TUÂN THỦ NGHIÊM NGẶT):**
         * \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
         * \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
-2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown.
+2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown. Nếu người dùng yêu cầu nhiều câu hỏi, bạn có thể trả về một mảng các đối tượng JSON trong một khối mã duy nhất.
     * **Định dạng khối mã PHẢI là:** Khối mã PHẢI bắt đầu bằng \`\`\`quiz trên một dòng riêng và kết thúc bằng \`\`\` trên một dòng riêng. TOÀN BỘ nội dung JSON phải nằm giữa hai dòng này.
-    * **Ví dụ định dạng đúng (TUÂN THỦ NGHIÊM NGẶT):**
+    * **Ví dụ định dạng đúng (MỘT ĐỐI TƯỢNG):**
         \`\`\`quiz
         {
             "type": "multiple_choice",
@@ -329,6 +323,26 @@
             "answer": "3x^2",
             "explanation": "Áp dụng công thức (x^n)' = n*x^(n-1), ta có (x^3)' = 3*x^(3-1) = 3x^2."
         }
+        \`\`\`
+    * **Ví dụ định dạng đúng (MẢNG ĐỐI TƯỢNG):**
+        \`\`\`quiz
+        [
+            {
+                "type": "multiple_choice",
+                "title": "Câu hỏi 1",
+                "question": "Câu hỏi đầu tiên?",
+                "options": ["A", "B", "C"],
+                "answer": "A",
+                "explanation": "Giải thích 1."
+            },
+            {
+                "type": "short_answer",
+                "title": "Câu hỏi 2",
+                "question": "Câu hỏi thứ hai?",
+                "answer": "Trả lời",
+                "explanation": "Giải thích 2."
+            }
+        ]
         \`\`\`
     * **Các loại quiz hỗ trợ:** "multiple_choice", "fill_in_the_blank", "short_answer", "flashcard".
     * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON. Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la.
@@ -350,7 +364,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
             model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-            console.log("Generative Model instance created with model 'gemini-1.5-flash-latest'!");
+            console.log("Generative Model instance created with model 'gemini-1.5-flash'!");
             
             solutionChat = model.startChat(); 
             console.log("Solution chat session started!");
@@ -391,7 +405,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         function extractAndReplaceQuizBlocks(text) {
             const extractedQuizzes = [];
             let quizIndex = 0;
-            // Use the updated, more flexible regex
             const cleanedText = text.replace(QUIZ_BLOCK_REGEX, (match, jsonContent) => {
                 extractedQuizzes.push(jsonContent.trim());
                 return `${QUIZ_PLACEHOLDER_PREFIX}${quizIndex++}`;
@@ -412,59 +425,49 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return processedText;
         }
 
-        // ***FIX 2: Enhanced cleanJSON function***
-        /**
-         * Attempts to clean a raw JSON string to make it parsable.
-         * Handles common AI-generated errors like trailing commas.
-         * @param {string} jsonString The raw JSON string.
-         * @returns {string} The cleaned JSON string.
-         */
         function cleanJSON(jsonString) {
             let cleaned = jsonString.trim();
-
-            // 1. Remove comments (if any) - not common but good practice
             cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-
-            // 2. Replace smart quotes with straight quotes
             cleaned = cleaned.replace(/[“”‘’]/g, '"');
-            
-            // 3. Remove trailing commas from objects and arrays
-            // Matches a comma that is followed by optional whitespace and then a } or ]
             cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
-
             return cleaned;
         }
 
-        function renderQuiz(quizJson) {
+        function renderQuiz(quizJson, quizIndex) {
             if (!quizJson || !quizJson.type) {
                 return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi: JSON của bài tập không hợp lệ.</div>`;
             }
             let html = `<div class="quiz-block border border-blue-200 rounded-lg p-4 my-3 bg-blue-50">`;
             html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Bài tập'}</p>`;
+            
             switch (quizJson.type) {
                 case 'multiple_choice':
-                    html += `<p class="mb-2">${quizJson.question}</p>`;
+                    html += `<p class="mb-2">${quizJson.question || 'Câu hỏi bị thiếu'}</p>`;
                     if (quizJson.options && Array.isArray(quizJson.options)) {
                         html += `<div class="space-y-2">`;
-                        quizJson.options.forEach(opt => {
-                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq" class="mr-2">${opt}</label>`;
+                        quizJson.options.forEach((opt, i) => {
+                             const optionText = (typeof opt === 'string' || typeof opt === 'number') ? opt : 'Lựa chọn không hợp lệ';
+                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq-${quizIndex}" value="${i}" class="mr-2">${optionText}</label>`;
                         });
                         html += `</div>`;
+                    } else {
+                        html += `<div class="text-red-500 text-sm my-2">Lỗi: Không tìm thấy các lựa chọn hoặc định dạng sai cho câu hỏi này.</div>`;
+                        console.error('Lỗi dữ liệu Quiz: Thuộc tính "options" bị thiếu hoặc không phải là một mảng.', quizJson);
                     }
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'fill_in_the_blank':
-                    html += `<p>${quizJson.question.replace(/__+/g, '<input type="text" class="border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent">')}</p>`;
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    html += `<p>${(quizJson.question || '').replace(/__+/g, '<input type="text" class="border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent">')}</p>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'short_answer':
-                    html += `<p>${quizJson.question}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${quizJson.answer}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    html += `<p>${quizJson.question || 'Câu hỏi bị thiếu'}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
                     break;
                 case 'flashcard':
                     html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center cursor-pointer">
-                                <div class="front"><p class="text-lg font-semibold">${quizJson.front}</p></div>
-                                <div class="back hidden"><p class="text-gray-700">${quizJson.back}</p></div>
+                                <div class="front"><p class="text-lg font-semibold">${quizJson.front || 'Mặt trước bị thiếu'}</p></div>
+                                <div class="back hidden"><p class="text-gray-700">${quizJson.back || 'Mặt sau bị thiếu'}</p></div>
                              </div>`;
                     break;
                 default:
@@ -474,6 +477,16 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return html;
         }
 
+        // =================================================================================
+        // *** HÀM ĐÃ CẬP NHẬT ***
+        // =================================================================================
+        /**
+         * Chèn các khối quiz đã được render vào nội dung HTML.
+         * Hàm này có thể xử lý cả đối tượng JSON đơn lẻ và mảng các đối tượng JSON.
+         * @param {string} htmlContent - Nội dung HTML chứa các placeholder cho quiz.
+         * @param {string[]} extractedQuizzes - Mảng các chuỗi JSON thô được trích xuất.
+         * @returns {string} - Nội dung HTML cuối cùng với các quiz đã được render.
+         */
         function insertRenderedQuizzes(htmlContent, extractedQuizzes) {
             let finalHtml = htmlContent;
             extractedQuizzes.forEach((quizRaw, index) => {
@@ -482,8 +495,22 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
                 try {
                     const cleanedQuizRaw = cleanJSON(quizRaw);
-                    const quizJson = JSON.parse(cleanedQuizRaw);
-                    quizHtml = renderQuiz(quizJson);
+                    const parsableQuizRaw = cleanedQuizRaw.replace(/\\/g, '\\\\');
+                    const quizData = JSON.parse(parsableQuizRaw);
+                    
+                    // *** SỬA LỖI: Xử lý trường hợp AI trả về một mảng các quiz ***
+                    if (Array.isArray(quizData)) {
+                        // Nếu là một mảng, render từng quiz trong mảng
+                        quizHtml = quizData.map((quizItem, itemIndex) => {
+                            // Tạo một index duy nhất cho mỗi quiz item để radio buttons hoạt động đúng
+                            const uniqueIndex = `${index}-${itemIndex}`;
+                            return renderQuiz(quizItem, uniqueIndex);
+                        }).join(''); // Nối tất cả HTML của các quiz lại với nhau
+                    } else {
+                        // Nếu là một đối tượng đơn lẻ, render như bình thường
+                        quizHtml = renderQuiz(quizData, index);
+                    }
+
                 } catch (e) {
                     console.error(`Error parsing or rendering quiz ${index}:`, e, "Raw JSON:", quizRaw);
                 }
@@ -493,7 +520,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
         
         function addQuizEventListeners(container) {
-            // Event listener for "Xem đáp án" buttons
             container.querySelectorAll('.quiz-block button').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const answerParagraph = e.target.nextElementSibling;
@@ -504,7 +530,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 });
             });
 
-            // Event listener for flashcards
             container.querySelectorAll('.flashcard').forEach(card => {
                 card.addEventListener('click', () => {
                     card.querySelector('.front').classList.toggle('hidden');
