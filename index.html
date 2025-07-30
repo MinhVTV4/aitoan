@@ -190,11 +190,56 @@
     </style>
 </head>
 <body class="flex flex-col min-h-screen items-center">
-    <h1 class="text-4xl font-extrabold text-blue-700 mb-4 text-center px-4 md:px-6 lg:px-8 w-full">Ứng dụng AI Toán học</h1>
-    <h2 class="text-lg text-gray-600 mb-8 text-center px-4 md:px-6 lg:px-8 w-full">(Sử dụng Gemini 1.5 Flash và MathJax)</h2>
+    <!-- NEW: Application Header -->
+    <header id="headerEl" class="w-full bg-blue-800 text-white p-4 shadow-lg flex flex-col sm:flex-row justify-between items-center z-30">
+        <div id="appTitleGroup" class="text-center sm:text-left mb-2 sm:mb-0">
+            <h1 class="text-3xl font-extrabold text-white mb-1">Ứng dụng AI Toán học</h1>
+            <h2 class="text-md text-blue-200">(Gemini 1.5 Flash & MathJax)</h2>
+        </div>
+        
+        <!-- NEW: User Auth Display & Controls (hidden by default, shown on login) -->
+        <div id="userAuthDisplay" class="flex items-center space-x-3 hidden">
+            <span id="currentUserEmailDisplay" class="text-sm font-medium text-blue-100"></span>
+            <button id="saveSessionBtn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded-lg shadow-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm">
+                Lưu phiên
+            </button>
+            <button id="signOutHeaderBtn"
+                    class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 text-sm">
+                Đăng xuất
+            </button>
+        </div>
+    </header>
 
-    <!-- Main Chat Content Area -->
-    <div class="flex-grow w-full flex flex-col px-4 md:px-6 lg:px-8">
+    <!-- Authentication Section (Initially visible, hidden on login) -->
+    <div id="authSection" class="w-full max-w-md bg-white p-8 rounded-xl shadow-xl mt-8 mb-8">
+        <p id="authStatus" class="text-center text-sm mb-4 text-gray-600">Đang tải trạng thái đăng nhập...</p>
+        <div id="signInForm" class="space-y-4">
+            <div>
+                <label for="emailInputAuth" class="block text-sm font-medium text-gray-700">Email:</label>
+                <input type="email" id="emailInputAuth" placeholder="your@email.com"
+                       class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200">
+            </div>
+            <div>
+                <label for="passwordInputAuth" class="block text-sm font-medium text-gray-700">Mật khẩu:</label>
+                <input type="password" id="passwordInputAuth" placeholder="Mật khẩu của bạn"
+                       class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200">
+            </div>
+            <div class="flex space-x-2">
+                <button id="signInBtn"
+                        class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    Đăng nhập
+                </button>
+                <button id="signUpBtn"
+                        class="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                    Đăng ký
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Content (Chat, Tabs, Input) -->
+    <div id="mainAppContent" class="flex-grow w-full flex flex-col px-4 md:px-6 lg:px-8 opacity-50 pointer-events-none">
         <!-- Tab Navigation -->
         <div id="tabContainer" class="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl shadow-sm">
             <button id="solutionTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-blue-600 border-b-2 border-blue-600 hover:bg-blue-50 focus:outline-none rounded-tl-xl">
@@ -244,9 +289,11 @@
                 <textarea id="promptInput" rows="1"
                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out text-gray-800 resize-y"
                           placeholder="Nhập yêu cầu của bạn..."
+                          disabled
                 ></textarea>
                 <button id="sendPromptButton"
                         class="bg-blue-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out text-lg font-semibold flex items-center justify-center h-fit"
+                        disabled
                 >
                     <span id="buttonText">Gửi</span>
                     <div id="buttonSpinner" class="spinner ml-2 hidden"></div>
@@ -270,6 +317,11 @@
         // Import các module Firebase cần thiết
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
         import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-ai.js";
+        // NEW: Import Firebase Authentication modules
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
+        // NEW: Import Firebase Firestore modules (placeholder for now)
+        // import { getFirestore, doc, setDoc, updateDoc, collection, query, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
 
         // Cấu hình Firebase của bạn (giữ nguyên như bạn đã cung cấp)
         const firebaseConfig = {
@@ -305,21 +357,42 @@
         const backToTopBtn = document.getElementById('backToTopBtn');
         const statusMessage = document.getElementById('statusMessage');
 
+        // NEW: Auth DOM Elements for Login Form
+        const authSection = document.getElementById('authSection');
+        const authStatus = document.getElementById('authStatus');
+        const signInForm = document.getElementById('signInForm');
+        const emailInputAuth = document.getElementById('emailInputAuth');
+        const passwordInputAuth = document.getElementById('passwordInputAuth');
+        const signInBtn = document.getElementById('signInBtn');
+        const signUpBtn = document.getElementById('signUpBtn');
+
+        // NEW: Auth/User Display Elements for Header
+        const headerEl = document.getElementById('headerEl');
+        const appTitleGroup = document.getElementById('appTitleGroup');
+        const userAuthDisplay = document.getElementById('userAuthDisplay');
+        const currentUserEmailDisplay = document.getElementById('currentUserEmailDisplay');
+        const saveSessionBtn = document.getElementById('saveSessionBtn');
+        const signOutHeaderBtn = document.getElementById('signOutHeaderBtn');
+
+        const mainAppContent = document.getElementById('mainAppContent'); // Wrapper for main chat UI
+
         // Global state for current chat session and content container
         let model;
-        let solutionChat;
-        let reviewChat;
+        let auth; // Firebase Auth instance
+        // let db; // Firestore instance (to be initialized later)
+        let currentUserUid = null; // Stores the current user's UID
+        let solutionChat = null; // Initialized on auth state change
+        let reviewChat = null;   // Initialized on auth state change
         let currentChatSession;
         let currentContentContainerElement;
         let currentActiveTab = 'solution'; // Default active tab
-        let completedTopics = []; // NEW: Stores prompts of completed learning topics
-        let lastUserMessageElement = null; // NEW: Stores reference to the last user message element
+        let completedTopics = []; // Stores prompts of completed learning topics
+        let lastUserMessageElement = null; // Stores reference to the last user message element
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
         const QUIZ_BLOCK_REGEX = /```(?:quiz|json)\n([\s\S]*?)\n```/g;
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
-        const BASIC_LINK_REGEX = /\[(.*?)\]/g;
 
         const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
@@ -370,41 +443,203 @@
 Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải nghiệm tương tác liền mạch cho người dùng.
 `;
 
-
         // Hàm cập nhật trạng thái
         function updateStatus(type, message) {
             statusMessage.className = `status-message text-sm ${type}`;
             statusMessage.innerHTML = message;
         }
 
-        updateStatus('text-yellow-600', "Firebase App đã khởi tạo.<br>Đang chờ khởi tạo AI Model...");
+        // NEW: Placeholder for saving data (to be implemented with Firestore)
+        async function handleSaveSession() {
+            if (!currentUserUid) {
+                updateStatus('text-red-600', "Bạn cần đăng nhập để lưu phiên.");
+                return;
+            }
+            // Logic để lưu completedTopics, lịch sử chat vào Firestore sẽ ở đây.
+            // Ví dụ: saveChatHistoryToFirestore('solution', solutionChat.getHistory());
+            // saveUserDataToFirestore(); // for completedTopics and currentActiveTab
+            console.log("Tính năng lưu phiên sẽ được phát triển sau.");
+            updateStatus('text-green-600', "Đã yêu cầu lưu phiên (chức năng đang được phát triển).");
+        }
 
+
+        // NEW: Authentication functions
+        async function handleSignUp() {
+            const email = emailInputAuth.value.trim();
+            const password = passwordInputAuth.value.trim();
+
+            if (!email || !password) {
+                authStatus.textContent = "Vui lòng nhập email và mật khẩu.";
+                authStatus.classList.remove('text-green-600', 'text-blue-600');
+                authStatus.classList.add('text-red-600');
+                return;
+            }
+
+            try {
+                authStatus.textContent = "Đang đăng ký...";
+                authStatus.classList.remove('text-red-600', 'text-green-600');
+                authStatus.classList.add('text-blue-600');
+                await createUserWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged will handle UI update
+                console.log("Đăng ký thành công!");
+            } catch (error) {
+                console.error("Lỗi đăng ký:", error);
+                let errorMessage = "Đăng ký thất bại.";
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = "Email này đã được sử dụng. Vui lòng đăng nhập hoặc sử dụng email khác.";
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = "Email không hợp lệ.";
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = "Mật khẩu quá yếu (ít nhất 6 ký tự).";
+                }
+                authStatus.textContent = errorMessage;
+                authStatus.classList.remove('text-green-600', 'text-blue-600');
+                authStatus.classList.add('text-red-600');
+            }
+        }
+
+        async function handleSignIn() {
+            const email = emailInputAuth.value.trim();
+            const password = passwordInputAuth.value.trim();
+
+            if (!email || !password) {
+                authStatus.textContent = "Vui lòng nhập email và mật khẩu.";
+                authStatus.classList.remove('text-green-600', 'text-blue-600');
+                authStatus.classList.add('text-red-600');
+                return;
+            }
+
+            try {
+                authStatus.textContent = "Đang đăng nhập...";
+                authStatus.classList.remove('text-red-600', 'text-green-600');
+                authStatus.classList.add('text-blue-600');
+                await signInWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged will handle UI update
+                console.log("Đăng nhập thành công!");
+            } catch (error) {
+                console.error("Lỗi đăng nhập:", error);
+                let errorMessage = "Đăng nhập thất bại.";
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                    errorMessage = "Sai email hoặc mật khẩu.";
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = "Email không hợp lệ.";
+                }
+                authStatus.textContent = errorMessage;
+                authStatus.classList.remove('text-green-600', 'text-blue-600');
+                authStatus.classList.add('text-red-600');
+            }
+        }
+
+        async function handleSignOut() {
+            try {
+                await signOut(auth);
+                console.log("Đăng xuất thành công!");
+                // onAuthStateChanged will handle UI update
+            } catch (error) {
+                console.error("Lỗi đăng xuất:", error);
+                // Update authStatus here for sign-out specific errors, if any
+                // For a simple sign-out, onAuthStateChanged handles most UI changes.
+            }
+        }
+
+        // NEW: Function to update UI based on auth state
+        function updateAuthUI(user) {
+            if (user) {
+                // User is signed in
+                currentUserUid = user.uid;
+                currentUserEmailDisplay.textContent = user.email || 'Ẩn danh'; // Show email in header
+                userAuthDisplay.classList.remove('hidden'); // Show user info in header
+                userAuthDisplay.classList.add('flex', 'items-center');
+
+                authSection.classList.add('hidden'); // Hide login form
+                
+                mainAppContent.classList.remove('opacity-50', 'pointer-events-none'); // Enable chat
+                promptInput.disabled = false;
+                sendPromptButton.disabled = false;
+                backToTopBtn.disabled = false;
+
+                // Only start chat sessions if they haven't been started for this user or explicitly cleared
+                if (!solutionChat) {
+                    solutionChat = model.startChat();
+                    console.log("Solution chat session started for user:", currentUserUid);
+                }
+                if (!reviewChat) {
+                    reviewChat = model.startChat({
+                        history: [
+                            { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
+                            { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] }
+                        ]
+                    });
+                    console.log("Review chat session started for user:", currentUserUid);
+                }
+
+                updateStatus('text-green-600', `Chào mừng ${user.email || 'người dùng'}. Sẵn sàng gửi yêu cầu.`);
+                switchTab(currentActiveTab); // Re-render current tab and ensure placeholders are shown/hidden correctly
+
+            } else {
+                // User is signed out
+                currentUserUid = null;
+                currentUserEmailDisplay.textContent = ''; // Clear email in header
+                userAuthDisplay.classList.add('hidden'); // Hide user info in header
+                userAuthDisplay.classList.remove('flex', 'items-center');
+
+                authSection.classList.remove('hidden'); // Show login form
+                authStatus.textContent = 'Vui lòng đăng nhập hoặc đăng ký.';
+                authStatus.classList.remove('text-green-600', 'text-blue-600');
+                authStatus.classList.add('text-gray-600');
+
+                // Clear input fields when logging out
+                emailInputAuth.value = '';
+                passwordInputAuth.value = '';
+
+                mainAppContent.classList.add('opacity-50', 'pointer-events-none'); // Disable chat
+                promptInput.disabled = true;
+                sendPromptButton.disabled = true;
+                backToTopBtn.disabled = true;
+
+                // Clear chat sessions and content
+                solutionChat = null;
+                reviewChat = null;
+                solutionResponseContainer.innerHTML = `<p id="solutionPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>`;
+                reviewResponseContainer.innerHTML = `<p id="reviewPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Nhập yêu cầu để tạo lộ trình ôn tập hoặc câu hỏi...</p>`;
+                completedTopics = []; // Clear completed topics
+
+                updateStatus('text-gray-600', "Bạn cần đăng nhập để bắt đầu.");
+            }
+        }
+
+
+        // Initial Firebase app and model setup
+        updateStatus('text-yellow-600', "Firebase App đã khởi tạo.<br>Đang chờ khởi tạo AI Model và trạng thái đăng nhập...");
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
             model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-            console.log("Generative Model instance created with model 'gemini-1.5-flash'!");
+            console.log("Generative Model instance created!");
             
-            solutionChat = model.startChat(); 
-            console.log("Solution chat session started!");
+            // NEW: Init Auth and listen for state changes
+            auth = getAuth(app);
+            onAuthStateChanged(auth, updateAuthUI); // This will trigger updateAuthUI on load
 
-            reviewChat = model.startChat({
-                history: [
-                    { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
-                    { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] }
-                ]
-            });
-            console.log("Review chat session started with learning mode system prompt!");
-            
-            currentChatSession = solutionChat;
-            currentContentContainerElement = solutionResponseContainer;
-            
-            updateStatus('text-green-600', "Generative Model instance đã tạo. Sẵn sàng gửi yêu cầu.");
         } catch (e) {
-            console.error("Lỗi khi khởi tạo AI Model:", e);
-            updateStatus('text-red-600', `Lỗi khởi tạo AI Model: ${e.message}.<br>Kiểm tra Console (F12) và đảm bảo Gemini API đã được kích hoạt cho dự án của bạn.`);
+            console.error("Lỗi khi khởi tạo Firebase/AI Model:", e);
+            updateStatus('text-red-600', `Lỗi khởi tạo: ${e.message}.<br>Kiểm tra Console (F12) và đảm bảo Firebase/Gemini API đã được kích hoạt.`);
+            // Ensure UI is disabled if model fails to init
+            mainAppContent.classList.add('opacity-50', 'pointer-events-none');
+            promptInput.disabled = true;
+            sendPromptButton.disabled = true;
+            backToTopBtn.disabled = true;
+            authSection.classList.remove('hidden'); // Show auth section so user knows there's an issue
         }
 
         function appendMessage(text, senderType, isLoading = false) {
+            // Remove placeholder if present
+            if (solutionPlaceholder && solutionPlaceholder.parentNode === currentContentContainerElement) {
+                solutionPlaceholder.remove();
+            }
+            if (reviewPlaceholder && reviewPlaceholder.parentNode === currentContentContainerElement) {
+                reviewPlaceholder.remove();
+            }
+
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('chat-message', senderType);
 
@@ -412,11 +647,11 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 const spinnerDiv = document.createElement('div');
                 spinnerDiv.classList.add('large-spinner');
                 messageDiv.appendChild(spinnerDiv);
-                messageDiv.spinner = spinnerDiv; // Store reference to spinner
                 
                 const textSpan = document.createElement('span'); // Span to stream text into
                 textSpan.classList.add('ml-3'); // Add some margin from spinner
                 messageDiv.appendChild(textSpan);
+                messageDiv.spinner = spinnerDiv; // Store reference to spinner
                 messageDiv.streamingTextSpan = textSpan; // Store reference to text span
             } else {
                 messageDiv.innerHTML = text;
@@ -460,7 +695,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
         function renderQuiz(quizJson, quizIndex) {
             if (!quizJson || !quizJson.type) {
-                return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi: JSON của bài tập không hợp lệ.</div>`;
+                return `<div class="bg-red-100 text-red-700 p-3 rounded-lg my-2">Lỗi: JSON của bài tập không hợp lệ.</div>`;
             }
             let html = `<div class="quiz-block border border-blue-200 rounded-lg p-4 my-3 bg-blue-50">`;
             html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Bài tập'}</p>`;
@@ -475,7 +710,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                         quizJson.options.forEach((opt, i) => {
                              // No need to wrap each option with $ here
                              const optionText = (typeof opt === 'string' || typeof opt === 'number') ? opt : 'Lựa chọn không hợp lệ';
-                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq-${quizIndex}" value="${i}" class="mr-2">${optionText}</label>`;
+                             html += `<label class="flex items-center p-2 border rounded-lg hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq-${quizIndex}" value="${i}" class="mr-2">${optionText}</label>`;
                         });
                         html += `</div>`;
                     } else {
@@ -485,7 +720,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     // No need to wrap answer and explanation with $ here
                     const mcqAnswer = quizJson.answer || 'N/A';
                     const mcqExplanation = quizJson.explanation || '';
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${mcqAnswer}<br><i>${mcqExplanation}</i></p></div>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${mcqAnswer}<br><i>${mcqExplanation}</i></p></div>`;
                     break;
                 case 'fill_in_the_blank':
                     // No need to wrap question with $ here
@@ -494,22 +729,22 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     // No need to wrap answer and explanation with $ here
                     const fitbAnswer = quizJson.answer || 'N/A';
                     const fitbExplanation = quizJson.explanation || '';
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${fitbAnswer}<br><i>${fitbExplanation}</i></p></div>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${fitbAnswer}<br><i>${fitbExplanation}</i></p></div>`;
                     break;
                 case 'short_answer':
                     // No need to wrap question with $ here
                     const saQuestion = quizJson.question || 'Câu hỏi bị thiếu';
-                    html += `<p>${saQuestion}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
+                    html += `<p>${saQuestion}</p><textarea class="w-full mt-2 p-2 border rounded-lg"></textarea>`;
                     // No need to wrap answer and explanation with $ here
                     const saAnswer = quizJson.answer || 'N/A';
                     const saExplanation = quizJson.explanation || '';
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${saAnswer}<br><i>${saExplanation}</i></p></div>`;
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${saAnswer}<br><i>${saExplanation}</i></p></div>`;
                     break;
                 case 'flashcard':
                     // No need to wrap front and back with $ here
                     const flashFront = quizJson.front || 'Mặt trước bị thiếu';
                     const flashBack = quizJson.back || 'Mặt sau bị thiếu';
-                    html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center cursor-pointer">
+                    html += `<div class="flashcard bg-white p-4 border rounded-lg shadow-sm text-center cursor-pointer">
                                 <div class="front"><p class="text-lg font-semibold">${flashFront}</p></div>
                                 <div class="back hidden"><p class="text-gray-700">${flashBack}</p></div>
                              </div>`;
@@ -532,7 +767,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             let finalHtml = htmlContent;
             extractedQuizzes.forEach((quizRaw, index) => {
                 const placeholder = `${QUIZ_PLACEHOLDER_PREFIX}${index}`;
-                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; 
+                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-lg my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; 
 
                 try {
                     const cleanedQuizRaw = cleanJSON(quizRaw);
@@ -598,8 +833,9 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
 
         async function callGeminiAPI(promptOverride = null) {
-            if (!model || !currentChatSession) {
-                updateStatus('text-red-600', "Mô hình AI hoặc phiên trò chuyện chưa được khởi tạo.");
+            // NEW: Check if user is logged in
+            if (!currentUserUid || !model || !currentChatSession) {
+                updateStatus('text-red-600', "Bạn cần đăng nhập để sử dụng tính năng này.");
                 return;
             }
 
@@ -688,7 +924,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 sendPromptButton.disabled = false;
                 promptInput.focus();
 
-                // NEW: Scroll back to the last user message element
+                // NEW: Scroll back to the last user message element (after rendering)
                 if (lastUserMessageElement) {
                     lastUserMessageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
@@ -712,17 +948,33 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 solutionTabBtn.classList.remove('text-gray-600', 'border-transparent');
                 currentChatSession = solutionChat;
                 currentContentContainerElement = solutionResponseContainer;
+                // Ensure placeholder visibility if no messages
+                if (solutionResponseContainer.children.length === 0) {
+                    solutionResponseContainer.innerHTML = `<p id="solutionPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>`;
+                }
             } else if (tabName === 'review') {
                 reviewContent.classList.remove('hidden');
                 reviewTabBtn.classList.add('text-blue-600', 'border-blue-600');
                 reviewTabBtn.classList.remove('text-gray-600', 'border-transparent');
                 currentChatSession = reviewChat;
                 currentContentContainerElement = reviewResponseContainer;
+                // Ensure placeholder visibility if no messages
+                if (reviewResponseContainer.children.length === 0) {
+                    reviewResponseContainer.innerHTML = `<p id="reviewPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Nhập yêu cầu để tạo lộ trình ôn tập hoặc câu hỏi...</p>`;
+                }
             }
             
             adjustLayout();
             currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
         }
+
+        // NEW: Add event listeners for auth buttons
+        signInBtn.addEventListener('click', handleSignIn);
+        signUpBtn.addEventListener('click', handleSignUp);
+        // NEW: Sign out button in header
+        signOutHeaderBtn.addEventListener('click', handleSignOut);
+        // NEW: Save session button
+        saveSessionBtn.addEventListener('click', handleSaveSession);
 
         if (sendPromptButton) {
             sendPromptButton.addEventListener("click", () => callGeminiAPI(null));
@@ -753,7 +1005,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
         window.addEventListener('load', () => {
             adjustLayout();
-            switchTab('solution');
+            // switchTab('solution') is now called by updateAuthUI after auth state is determined
         });
         window.addEventListener('resize', adjustLayout);
 
