@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase AI Logic MVP - Gemini Developer API (1.5 Flash) với MathJax</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- MathJax CDN (Configuration before script load) -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']], // Use $...$ and \(...)\ for inline math
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], // Use $$...$$ and \[...\] for display math
+                processEscapes: true, // Allows using \$ for a literal dollar sign
+                processEnvironments: true, // Enables LaTeX environments like \begin{align}
+            },
+            // The problematic 'options' block has been completely removed.
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Marked.js CDN for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Custom CSS for spinners and specific elements not easily covered by Tailwind */
+        body {
+            font-family: sans-serif;
+            background-color: #f4f4f4;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-left-color: #fff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        .large-spinner { /* Used for internal message spinner now */
+            width: 20px; /* Smaller for inline use */
+            height: 20px;
+            border-width: 3px; /* Thinner border */
+            border-left-color: #3b82f6; /* Tailwind blue-500 */
+            margin: auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Ensure MathJax elements are properly rendered within the container */
+        #responseContainer {
+            min-height: 120px; /* Ensure minimum height for output area */
+            line-height: 1.6; /* Tăng khoảng cách dòng để dễ đọc hơn */
+            font-size: 1.1rem; /* Tăng kích thước chữ */
+            overflow-y: auto; /* Allow vertical scrolling for chat history */
+            overflow-x: hidden; /* Prevent horizontal scroll on container itself */
+            display: flex; /* Flex container for messages */
+            flex-direction: column; /* Stack messages vertically */
+        }
+        
+        /* Message bubble styling */
+        .chat-message {
+            max-width: 90%; /* Max width for chat bubbles */
+            padding: 0.8em 1em;
+            border-radius: 0.75em; /* Rounded corners */
+            margin-bottom: 0.75em; /* Space between messages */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* Subtle shadow for depth */
+            word-wrap: break-word; /* Ensure long words break */
+            white-space: pre-wrap; /* Preserve whitespace and wrap text */
+        }
+        .user-message {
+            background-color: #d1fae5; /* Tailwind green-100 */
+            color: #065f46; /* Tailwind green-900 */
+            align-self: flex-end; /* Align to the right */
+        }
+        .ai-message {
+            background-color: #eff6ff; /* Tailwind blue-100 */
+            color: #1e40af; /* Tailwind blue-900 */
+            align-self: flex-start; /* Align to the left */
+        }
+
+        /* Styling for #responseContent children to improve readability for structured answers */
+        /* These styles now apply to content WITHIN .ai-message bubbles */
+        .ai-message h1,
+        .ai-message h2,
+        .ai-message h3,
+        .ai-message h4,
+        .ai-message h5,
+        .ai-message h6 {
+            margin-top: 1.2em; /* Add space above headings */
+            margin-bottom: 0.6em;
+            font-weight: 600; /* Semi-bold */
+            color: #2c5282; /* A darker blue for headings */
+        }
+        .ai-message h3 {
+            font-size: 1.4rem; /* Slightly smaller for chat bubble context */
+            border-bottom: 1px solid #ebf8ff; /* Light border under h3 */
+            padding-bottom: 0.2em;
+        }
+        .ai-message h4 {
+            font-size: 1.2rem; /* Slightly smaller for chat bubble context */
+            color: #3182ce; /* A slightly lighter blue for h4 */
+        }
+        .ai-message p {
+            margin-bottom: 0.8em; /* Space between paragraphs */
+        }
+        .ai-message ul,
+        .ai-message ol {
+            margin-left: 1.5em; /* Indent lists */
+            margin-bottom: 0.8em;
+            list-style-position: outside; /* Ensure bullets/numbers are outside content */
+        }
+        .ai-message li {
+            margin-bottom: 0.4em; /* Space between list items */
+        }
+
+        /* Enhanced styling for MathJax Display equations within messages */
+        .ai-message .MathJax_Display {
+            background-color: #e0f2fe; /* Lighter blue background for equations in bubbles */
+            border-left: 4px solid #63b3ed; /* Blue left border */
+            padding: 0.8em; /* Padding around the equation */
+            border-radius: 0.5em; /* Slightly rounded corners */
+            margin: 1.2em 0 !important; /* Override default MathJax margin */
+            overflow-x: auto; /* Ensure horizontal scrolling for long equations within their box */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* Subtle shadow */
+        }
+        /* Ensure inline math is also readable, though usually MathJax handles this well */
+        .ai-message .MathJax_CHTML {
+            line-height: 1.2; /* Ensure inline math doesn't affect line height too much */
+        }
+
+        /* Back to Top Button Styling (Hidden by default) */
+        #backToTopBtn {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px); /* Start slightly down */
+        }
+        #backToTopBtn.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0); /* Slide up to position */
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center p-5">
+    <h1 class="text-4xl font-extrabold text-blue-700 mb-4 text-center">Ứng dụng AI Toán học</h1>
+    <h2 class="text-lg text-gray-600 mb-8 text-center">(Sử dụng Gemini 2.5 Flash và MathJax)</h2>
+
+    <!-- Main Chat Content Area -->
+    <div class="flex-grow w-full max-w-7xl flex flex-col">
+        <div class="w-full h-full bg-white p-6 rounded-xl shadow-lg flex flex-col">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-3">Phản hồi từ AI</h3>
+            <div id="responseContainer"
+                 class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative overflow-y-auto"
+                 style="display: flex; flex-direction: column;"
+            >
+                <!-- Messages will be dynamically added here -->
+                <p id="responsePlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>
+            </div>
+            <p class="text-sm text-gray-600 mt-4 italic text-center">
+                Để có lời giải chuẩn như sách giáo khoa, hãy yêu cầu AI trình bày chi tiết từng bước và sử dụng LaTeX cho mọi công thức.
+            </p>
+        </div>
+    </div>
+
+    <!-- Fixed Input Footer -->
+    <div id="chatInputFooter" 
+         class="fixed bottom-0 left-0 right-0 w-full bg-white p-4 shadow-xl z-40">
+        <div class="max-w-7xl mx-auto flex flex-col space-y-4">
+            <h3 class="text-xl font-semibold text-gray-800 hidden md:block">Nhập yêu cầu của bạn</h3>
+            <textarea id="promptInput" rows="4"
+                      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out text-gray-800 resize-y"
+                      placeholder="Ví dụ: Giải tích phân của $x^2$ từ 0 đến 1. Trình bày lời giải chi tiết theo từng bước, mỗi bước có giải thích và sử dụng LaTeX cho tất cả các công thức toán học. **Hãy sử dụng $$...$$ cho các công thức toán học lớn trên dòng riêng, và $...$ cho công thức trong văn bản.**"
+            ></textarea>
+            <button id="sendPromptButton"
+                    class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out text-lg font-semibold flex items-center justify-center"
+            >
+                <span id="buttonText">Gửi yêu cầu tới Gemini</span>
+                <div id="buttonSpinner" class="spinner ml-2 hidden"></div>
+            </button>
+            <p id="statusMessage" class="status-message text-sm text-center"></p>
+        </div>
+    </div>
+
+    <!-- Back to Top Button -->
+    <button id="backToTopBtn" title="Quay lại đầu trang"
+            class="fixed right-5 md:right-8 lg:right-10 
+                   bg-blue-600 text-white p-3 rounded-full shadow-lg 
+                   hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 
+                   transition-all duration-300 ease-in-out text-xl z-50">
+        &#x2191; <!-- Unicode for an upward arrow -->
+    </button>
+
+    <script type="module">
+        // Import các module Firebase cần thiết
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+        import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-ai.js";
+
+        // Cấu hình Firebase của bạn (giữ nguyên như bạn đã cung cấp)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAI2tN9qy9JqCySLkbTRqgGALlJfuTjg88",
+            authDomain: "shopee-3eabb.firebaseapp.com",
+            projectId: "shopee-3eabb",
+            storageBucket: "shopee-3eabb.firebasestorage.app",
+            messagingSenderId: "19651189872",
+            appId: "1:19651189872:web:fb0fff66e8c98ceb5928b5"
+        };
+
+        // Khởi tạo ứng dụng Firebase
+        const app = initializeApp(firebaseConfig);
+        console.log("Firebase App initialized!");
+
+        // Lấy các phần tử DOM
+        const promptInput = document.getElementById('promptInput');
+        const sendPromptButton = document.getElementById('sendPromptButton');
+        const buttonText = document.getElementById('buttonText');
+        const buttonSpinner = document.getElementById('buttonSpinner');
+        const responseContainer = document.getElementById('responseContainer'); // This is now the scrollable chat container
+        const responsePlaceholder = document.getElementById('responsePlaceholder'); // Initial welcome message
+        const chatMessagesContainer = responseContainer; // Reference to the main container for messages
+        const chatInputFooter = document.getElementById('chatInputFooter'); // New: Fixed input footer
+        const backToTopBtn = document.getElementById('backToTopBtn'); // New: Back to Top button
+
+        const statusMessage = document.getElementById('statusMessage');
+
+        // Hàm cập nhật trạng thái
+        function updateStatus(type, message) {
+            statusMessage.className = `status-message text-sm ${type}`;
+            statusMessage.innerHTML = message; // Sử dụng innerHTML để hiển thị <br>
+        }
+
+        updateStatus('text-yellow-600', "Firebase App đã khởi tạo.<br>Đang chờ khởi tạo AI Model...");
+
+        let model;
+        let chat; // The chat session for maintaining context
+
+        try {
+            const ai = getAI(app, { backend: new GoogleAIBackend() });
+            model = getGenerativeModel(ai, { model: "gemini-2.5-flash-preview-05-20" });
+            console.log("Generative Model instance created with model 'gemini-2.5-flash-preview-05-20'!");
+            
+            // Start the chat session immediately after model is ready
+            chat = model.startChat(); 
+            console.log("Chat session started!");
+            
+            updateStatus('text-green-600', "Generative Model instance đã tạo. Sẵn sàng gửi yêu cầu.");
+        } catch (e) {
+            console.error("Lỗi khi khởi tạo AI Model:", e);
+            updateStatus('text-red-600', `Lỗi khởi tạo AI Model: ${e.message}.<br>Kiểm tra Console (F12) và đảm bảo Gemini API đã được kích hoạt cho dự án của bạn.`);
+        }
+
+        // Helper function to create and append a message element
+        function appendMessage(text, senderType, isLoading = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', senderType);
+
+            if (isLoading) {
+                messageDiv.innerHTML = `<div class="large-spinner"></div>`;
+                // Store a reference to the spinner if needed for removal later
+                messageDiv.spinner = messageDiv.querySelector('.large-spinner');
+            } else {
+                messageDiv.innerHTML = text;
+            }
+            
+            chatMessagesContainer.appendChild(messageDiv);
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Auto-scroll to bottom
+            return messageDiv; // Return the created message div for potential updates
+        }
+
+        // Hàm gọi API Gemini và xử lý phản hồi
+        async function callGeminiAPI() {
+            if (!model || !chat) { // Ensure both model and chat are initialized
+                updateStatus('text-red-600', "Mô hình AI hoặc phiên trò chuyện chưa được khởi tạo. Vui lòng kiểm tra console để biết lỗi.");
+                return;
+            }
+
+            const promptText = promptInput.value.trim();
+            if (!promptText) {
+                updateStatus('text-red-600', "Vui lòng nhập lời nhắc!");
+                return;
+            }
+
+            // --- Start Loading State ---
+            updateStatus('text-yellow-600', "Đang gửi yêu cầu đến Gemini...");
+            
+            // Hide the initial placeholder if it's still visible
+            if (!responsePlaceholder.classList.contains('hidden')) {
+                responsePlaceholder.classList.add('hidden');
+            }
+
+            // Append user's message
+            appendMessage(promptText, 'user-message');
+            promptInput.value = ''; // Clear input field
+
+            // Append AI's loading message placeholder
+            const aiLoadingMessageDiv = appendMessage('', 'ai-message', true);
+
+
+            buttonText.textContent = 'Đang gửi...';
+            buttonSpinner.classList.remove('hidden');
+            sendPromptButton.disabled = true;
+            // --- End Loading State ---
+
+            try {
+                // Use chat.sendMessage to maintain context
+                const result = await chat.sendMessage(promptText);
+                const response = result.response;
+                const text = response.text();
+
+                // Chuyển đổi Markdown thành HTML bằng marked.js
+                const htmlContent = marked.parse(text); 
+
+                // Update the AI's loading message div with actual content
+                aiLoadingMessageDiv.innerHTML = htmlContent;
+                if (aiLoadingMessageDiv.spinner) { // Remove spinner if it exists
+                    aiLoadingMessageDiv.spinner.remove();
+                }
+
+                // Yêu cầu MathJax xử lý nội dung mới để render các công thức toán học
+                if (typeof MathJax !== 'undefined') {
+                    // Only typeset the newly added message div
+                    await MathJax.typesetPromise([aiLoadingMessageDiv]);
+                } else {
+                    console.warn("MathJax chưa được tải hoặc không khả dụng.");
+                }
+
+                // --- End Loading & Show Content State ---
+                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom after content is rendered
+                updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
+                console.log("Response text:", text);
+
+            } catch (error) {
+                console.error("Lỗi khi gọi Gemini API:", error);
+                // Update the AI's loading message div with error text
+                aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12) để biết thêm chi tiết.</p>`;
+                if (aiLoadingMessageDiv.spinner) { // Remove spinner if it exists
+                    aiLoadingMessageDiv.spinner.remove();
+                }
+                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom
+                updateStatus('text-red-600', `Lỗi khi gọi Gemini API: ${error.message}.`);
+            } finally {
+                buttonText.textContent = 'Gửi yêu cầu tới Gemini';
+                buttonSpinner.classList.add('hidden');
+                sendPromptButton.disabled = false;
+                promptInput.focus(); // Keep focus on input for continued conversation
+            }
+        }
+
+        // Gán sự kiện click cho nút
+        if (sendPromptButton) {
+            sendPromptButton.addEventListener("click", callGeminiAPI);
+            promptInput.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && !event.shiftKey) { // Gửi khi nhấn Enter, không gửi khi nhấn Shift+Enter
+                    event.preventDefault(); // Ngăn xuống dòng mặc định trong textarea
+                    callGeminiAPI();
+                }
+            });
+        } else {
+            console.error("Không tìm thấy nút 'sendPromptButton'.");
+            updateStatus('text-red-600', "Không tìm thấy nút gửi. Lỗi HTML?");
+        }
+
+        // --- Layout Adjustment and Back to Top Button Logic ---
+        function adjustLayout() {
+            const footerHeight = chatInputFooter.offsetHeight;
+            // Add padding to the scrollable chat container to prevent content from being hidden by the fixed footer
+            // Add an extra 20px for visual margin
+            chatMessagesContainer.style.paddingBottom = `${footerHeight + 20}px`; 
+
+            // Position the back to top button above the footer
+            backToTopBtn.style.bottom = `${footerHeight + 20}px`; // 20px above the footer
+        }
+
+        window.addEventListener('load', adjustLayout);
+        window.addEventListener('resize', adjustLayout); // Re-adjust on window resize
+
+        window.addEventListener('scroll', () => {
+            // Show/hide back to top button based on scroll position
+            // Use window.pageYOffset for overall page scroll
+            if (window.pageYOffset > responseContainer.clientHeight / 2) { 
+                backToTopBtn.classList.add('show');
+            } else {
+                backToTopBtn.classList.remove('show');
+            }
+        });
+
+        backToTopBtn.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth' // Smooth scroll to top of the page
+            });
+        });
+        // --- End Layout Adjustment and Back to Top Button Logic ---
+    </script>
+</body>
+</html>
