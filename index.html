@@ -48,7 +48,7 @@
         }
         
         /* Ensure MathJax elements are properly rendered within the container */
-        #responseContainer {
+        .chat-container-content { /* New class for content containers */
             min-height: 120px; /* Ensure minimum height for output area */
             line-height: 1.6; /* Tăng khoảng cách dòng để dễ đọc hơn */
             font-size: 1.1rem; /* Tăng kích thước chữ */
@@ -140,6 +140,40 @@
             visibility: visible;
             transform: translateY(0); /* Slide up to position */
         }
+
+        /* Interactive Link Styling */
+        .interactive-link {
+            display: inline-block;
+            background-color: #e0f2fe; /* Light blue background */
+            color: #1e40af; /* Dark blue text */
+            padding: 0.2em 0.6em;
+            border-radius: 0.3em;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            font-weight: 500;
+            border: 1px solid #90cdf4; /* Light blue border */
+            text-decoration: none; /* Remove underline for consistency */
+            margin: 0.1em; /* Add a small margin for spacing */
+        }
+        .interactive-link:hover {
+            background-color: #bfdbfe; /* Slightly darker blue on hover */
+            transform: translateY(-1px); /* Slight lift effect */
+        }
+        .interactive-link:active {
+            transform: translateY(0); /* Return to original position on click */
+        }
+
+        /* Completed Topic Styling */
+        .interactive-link.completed-topic {
+            text-decoration: line-through;
+            opacity: 0.7;
+            background-color: #dbeafe; /* Lightest blue */
+            color: #60a5fa; /* Muted blue */
+            border-color: #93c5fd; /* Muted border blue */
+        }
+        .interactive-link.completed-topic:hover {
+            background-color: #bfdbfe; /* Still hover effect, but from a muted base */
+        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen items-center p-5">
@@ -148,18 +182,43 @@
 
     <!-- Main Chat Content Area -->
     <div class="flex-grow w-full max-w-7xl flex flex-col">
-        <div class="w-full h-full bg-white p-6 rounded-xl shadow-lg flex flex-col">
-            <h3 class="text-2xl font-semibold text-gray-800 mb-3">Phản hồi từ AI</h3>
-            <div id="responseContainer"
-                 class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative overflow-y-auto"
-                 style="display: flex; flex-direction: column;"
-            >
-                <!-- Messages will be dynamically added here -->
-                <p id="responsePlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>
+        <!-- Tab Navigation -->
+        <div id="tabContainer" class="flex border-b border-gray-200 mb-4 bg-white rounded-t-xl shadow-sm">
+            <button id="solutionTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-blue-600 border-b-2 border-blue-600 hover:bg-blue-50 focus:outline-none rounded-tl-xl">
+                Lời giải
+            </button>
+            <button id="reviewTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none rounded-tr-xl">
+                Ôn tập
+            </button>
+        </div>
+
+        <div class="w-full h-full bg-white p-6 rounded-b-xl shadow-lg flex flex-col">
+            <!-- Solution Content -->
+            <div id="solutionContent" class="flex-grow flex flex-col">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-3">Phản hồi từ AI</h3>
+                <div id="solutionResponseContainer"
+                     class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative chat-container-content"
+                >
+                    <!-- Messages will be dynamically added here -->
+                    <p id="solutionPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>
+                </div>
+                <p class="text-sm text-gray-600 mt-4 italic text-center">
+                    Để có lời giải chuẩn như sách giáo khoa, hãy yêu cầu AI trình bày chi tiết từng bước và sử dụng LaTeX cho mọi công thức.
+                </p>
             </div>
-            <p class="text-sm text-gray-600 mt-4 italic text-center">
-                Để có lời giải chuẩn như sách giáo khoa, hãy yêu cầu AI trình bày chi tiết từng bước và sử dụng LaTeX cho mọi công thức.
-            </p>
+
+            <!-- Review Content (initially hidden) -->
+            <div id="reviewContent" class="flex-grow flex-col hidden">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-3">Lộ trình và Bài tập Ôn tập</h3>
+                <div id="reviewResponseContainer"
+                     class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative chat-container-content"
+                >
+                    <p id="reviewPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Nhập yêu cầu để tạo lộ trình ôn tập hoặc câu hỏi...</p>
+                </div>
+                <p class="text-sm text-gray-600 mt-4 italic text-center">
+                    Ví dụ: "Tạo lộ trình ôn tập môn Toán lớp 12 chương Giải tích". Hoặc "Tạo 3 câu hỏi trắc nghiệm về đạo hàm".
+                </p>
+            </div>
         </div>
     </div>
 
@@ -218,33 +277,103 @@
         const sendPromptButton = document.getElementById('sendPromptButton');
         const buttonText = document.getElementById('buttonText');
         const buttonSpinner = document.getElementById('buttonSpinner');
-        const responseContainer = document.getElementById('responseContainer'); // This is now the scrollable chat container
-        const responsePlaceholder = document.getElementById('responsePlaceholder'); // Initial welcome message
-        const chatMessagesContainer = responseContainer; // Reference to the main container for messages
-        const chatInputFooter = document.getElementById('chatInputFooter'); // New: Fixed input footer
-        const backToTopBtn = document.getElementById('backToTopBtn'); // New: Back to Top button
 
+        // Tab and Content Elements
+        const solutionTabBtn = document.getElementById('solutionTabBtn');
+        const reviewTabBtn = document.getElementById('reviewTabBtn');
+        const solutionContent = document.getElementById('solutionContent');
+        const reviewContent = document.getElementById('reviewContent');
+        const solutionResponseContainer = document.getElementById('solutionResponseContainer');
+        const reviewResponseContainer = document.getElementById('reviewResponseContainer');
+        const solutionPlaceholder = document.getElementById('solutionPlaceholder');
+        const reviewPlaceholder = document.getElementById('reviewPlaceholder');
+
+        const chatInputFooter = document.getElementById('chatInputFooter');
+        const backToTopBtn = document.getElementById('backToTopBtn');
         const statusMessage = document.getElementById('statusMessage');
+
+        // Global state for current chat session and content container
+        let model;
+        let solutionChat;
+        let reviewChat;
+        let currentChatSession;
+        let currentContentContainerElement;
+        let currentActiveTab = 'solution'; // Default active tab
+        let completedTopics = []; // NEW: Stores prompts of completed learning topics
+
+        // Constants for quiz and interactive link processing
+        const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
+        const QUIZ_BLOCK_REGEX = /```quiz([\s\S]*?)```/g;
+        // Regex for [Text]{"prompt":"..."} or [Text] (basic link)
+        // Updated to use negative lookbehind for robustness
+        const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
+        const BASIC_LINK_REGEX = /\[(.*?)\]/g;
+
+        // SYSTEM PROMPT cho chế độ Ôn tập
+const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
+
+**Quy tắc phản hồi chính:**
+1.  **Lộ trình ôn tập:** Khi người dùng yêu cầu lộ trình ôn tập cho một chủ đề/chương cụ thể, bạn phải trả về một danh sách các mục ôn tập dưới dạng Markdown. **Cực kỳ quan trọng: Mỗi mục trong danh sách này phải là một liên kết tương tác với một lời nhắc (prompt) ẩn đi để yêu cầu giải thích lý thuyết chi tiết về mục đó.**
+    *   **Định dạng liên kết tương tác PHẢI là:** \`[Tên mục ôn tập]{"prompt":"Giải thích chi tiết về [Tên mục ôn tập] bao gồm định nghĩa, công thức, tính chất và các ví dụ minh họa."}\`
+    *   **Các ví dụ minh họa về liên kết lý thuyết trong lộ trình (TUÂN THỦ CÁC VÍ DỤ NÀY):**
+        *   \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
+        *   \`[Đạo hàm hàm hợp]{"prompt":"Trình bày lý thuyết về đạo hàm hàm hợp một cách đầy đủ và dễ hiểu."}\`
+        *   \`[Cực trị hàm số]{"prompt":"Giải thích lý thuyết về cực trị hàm số, bao gồm các điều kiện cần và đủ."}\`
+        *   \`[Tiệm cận đồ thị]{"prompt":"Cung cấp lý thuyết chi tiết về các dạng tiệm cận của đồ thị hàm số (đứng, ngang, xiên)."}\`
+        *   \`[Tích phân xác định]{"prompt":"Giải thích định nghĩa, tính chất và phương pháp tính tích phân xác định."}\`
+        *   \`[Ứng dụng tích phân vào hình học]{"prompt":"Trình bày lý thuyết về ứng dụng tích phân để tính diện tích hình phẳng và thể tích vật thể."}\`
+        *   \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
+        *   \`[Phương trình vi phân]{"prompt":"Cung cấp lý thuyết về phương trình vi phân cấp 1 và phương pháp giải."}\`
+2.  **Tạo bài tập/quiz (Tùy chọn):** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn có thể trả về một khối quiz dưới dạng JSON.
+    *   **Định dạng JSON Quiz:** Tất cả các khối JSON quiz phải được bao bọc trong cú pháp khối mã Markdown đặc biệt: \`\`\`quiz...json...\`\`\`
+    *   **Các loại quiz hỗ trợ (ĐẢM BẢO SỬ DỤNG HẾT CÁC LOẠI NÀY KHI PHÙ HỢP):**
+        *   **multiple_choice:** \`{"type": "multiple_choice", "title": "...", "question": "...", "options": ["...", "...", "..."], "answer": "...", "explanation": "..."}\`
+        *   **fill_in_the_blank:** \`{"type": "fill_in_the_blank", "title": "...", "question": "...", "answer": "...", "explanation": "..."}\`
+        *   **short_answer:** \`{"type": "short_answer", "title": "...", "question": "...", "answer": "...", "explanation": "..."}\`
+        *   **flashcard:** \`{"type": "flashcard", "title": "...", "front": "...", "back": "..."}\`
+    *   **Quan trọng:** Các giá trị chuỗi bên trong JSON (question, options, answer, explanation, front, back) phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, LaTeX hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON (ví dụ: không có dấu \`,\*,_,$,#, v.v. TRONG NỘI DUNG CHUỖI). Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la hoặc dấu ngoặc vuông LaTeX.
+3.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối lý thuyết hoặc quiz.
+4.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
+
+Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải nghiệm tương tác liền mạch cho người dùng.
+`;
+
 
         // Hàm cập nhật trạng thái
         function updateStatus(type, message) {
             statusMessage.className = `status-message text-sm ${type}`;
-            statusMessage.innerHTML = message; // Sử dụng innerHTML để hiển thị <br>
+            statusMessage.innerHTML = message;
         }
 
         updateStatus('text-yellow-600', "Firebase App đã khởi tạo.<br>Đang chờ khởi tạo AI Model...");
-
-        let model;
-        let chat; // The chat session for maintaining context
 
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
             model = getGenerativeModel(ai, { model: "gemini-2.5-flash-preview-05-20" });
             console.log("Generative Model instance created with model 'gemini-2.5-flash-preview-05-20'!");
             
-            // Start the chat session immediately after model is ready
-            chat = model.startChat(); 
-            console.log("Chat session started!");
+            // Initialize solution chat without specific history (general math problem solving)
+            solutionChat = model.startChat(); 
+            console.log("Solution chat session started!");
+
+            // Initialize review chat with system prompt for learning mode
+            reviewChat = model.startChat({
+                history: [
+                    {
+                        role: "user",
+                        parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] // System prompt as initial user message
+                    },
+                    {
+                        role: "model",
+                        parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] // AI confirmation
+                    }
+                ]
+            });
+            console.log("Review chat session started with learning mode system prompt!");
+            
+            // Set initial active session and container
+            currentChatSession = solutionChat;
+            currentContentContainerElement = solutionResponseContainer;
             
             updateStatus('text-green-600', "Generative Model instance đã tạo. Sẵn sàng gửi yêu cầu.");
         } catch (e) {
@@ -259,25 +388,188 @@
 
             if (isLoading) {
                 messageDiv.innerHTML = `<div class="large-spinner"></div>`;
-                // Store a reference to the spinner if needed for removal later
                 messageDiv.spinner = messageDiv.querySelector('.large-spinner');
             } else {
                 messageDiv.innerHTML = text;
             }
             
-            chatMessagesContainer.appendChild(messageDiv);
-            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Auto-scroll to bottom
+            // Append to the currently active content container
+            currentContentContainerElement.appendChild(messageDiv);
+            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight; // Auto-scroll to bottom
             return messageDiv; // Return the created message div for potential updates
         }
 
+        /**
+         * Extracts raw quiz JSON blocks (```quiz...```) from the text,
+         * replaces them with placeholders, and returns the cleaned text
+         * along with the extracted JSON blocks.
+         * @param {string} text The raw text from AI response.
+         * @returns {{cleanedText: string, extractedQuizzes: Array<string>}}
+         */
+        function extractAndReplaceQuizBlocks(text) {
+            const extractedQuizzes = [];
+            let quizIndex = 0;
+            const cleanedText = text.replace(QUIZ_BLOCK_REGEX, (match, jsonContent) => {
+                extractedQuizzes.push(jsonContent.trim());
+                return `${QUIZ_PLACEHOLDER_PREFIX}${quizIndex++}`;
+            });
+            return { cleanedText, extractedQuizzes };
+        }
+
+        /**
+         * Preprocesses the text to convert custom interactive link patterns
+         * into clickable HTML spans.
+         * Pattern: [Link Text]{"prompt":"Optional prompt to send to AI"} or [Link Text]
+         * @param {string} text The text to preprocess.
+         * @returns {string} The processed HTML string.
+         */
+        function preprocessText(text) {
+            let processedText = text;
+
+            // Process specific interactive links: [Text]{"prompt":"..."}
+            // Uses a lookbehind assertion to ensure it's not part of a markdown link [text](url)
+            // or an image ![text](url)
+            processedText = processedText.replace(INTERACTIVE_LINK_REGEX, (match, linkText, promptValue) => {
+                // If a promptValue is present, encode it for data-attribute
+                const decodedPrompt = promptValue ? decodeURIComponent(promptValue) : '';
+                const isCompleted = completedTopics.includes(decodedPrompt);
+                const completedClass = isCompleted ? ' completed-topic' : '';
+                
+                const dataAttribute = promptValue ? `data-prompt="${encodeURIComponent(promptValue)}"` : '';
+                return `<span class="interactive-link${completedClass}" ${dataAttribute}>${linkText}</span>`;
+            });
+            
+            // For now, simple [text] links are handled by marked.js (as standard Markdown links).
+            // If we need custom behavior for [text] without prompt, we'd add another regex here.
+
+            return processedText;
+        }
+
+        /**
+         * Attempts to clean a raw JSON string to make it parsable.
+         * This is a simplified version and may need more robust handling
+         * for complex edge cases.
+         * @param {string} jsonString The raw JSON string.
+         * @returns {string} The cleaned JSON string.
+         */
+        function cleanJSON(jsonString) {
+            // Remove common issues:
+            // 1. Remove newlines and tabs within content, but keep structure newlines
+            let cleaned = jsonString.replace(/[\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+            // 2. Remove problematic characters that often appear from AI outputs
+            cleaned = cleaned.replace(/[“”‘’]/g, '"'); // Replace smart quotes with straight quotes
+            cleaned = cleaned.replace(/\\(?!["\\/bfnrtu])/g, ''); // Remove invalid backslashes (keep valid ones)
+            // 3. Ensure proper quotes for keys/values if AI sometimes misses them (complex, usually better with system prompt)
+            // For simple cases, replace any leading/trailing spaces for robustness before parsing.
+            return cleaned;
+        }
+
+        /**
+         * Renders a single quiz JSON object into its HTML representation.
+         * This is a placeholder and needs full implementation for each quiz type.
+         * @param {object} quizJson Parsed quiz JSON object.
+         * @returns {string} HTML string for the quiz.
+         */
+        function renderQuiz(quizJson) {
+            if (!quizJson || !quizJson.type) {
+                return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Error: Invalid quiz JSON.</div>`;
+            }
+            let html = `<div class="quiz-block border border-blue-200 rounded-lg p-4 my-3 bg-blue-50">`;
+            html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Quiz'}</p>`;
+            switch (quizJson.type) {
+                case 'multiple_choice':
+                    html += `<p>${quizJson.question}</p>`;
+                    if (quizJson.options && Array.isArray(quizJson.options)) {
+                        html += `<ul class="list-disc ml-5 mt-2">`;
+                        quizJson.options.forEach(opt => {
+                            html += `<li>${opt}</li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    break;
+                case 'fill_in_the_blank':
+                    html += `<p>${quizJson.question.replace(/__+/g, '_______')}</p>`;
+                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    break;
+                case 'short_answer':
+                    html += `<p>${quizJson.question}</p>`;
+                    html += `<button class="mt-3 bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button>`;
+                    break;
+                case 'flashcard':
+                    html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center">
+                                <p class="text-lg font-semibold">${quizJson.front}</p>
+                                <button class="mt-3 bg-gray-300 text-gray-800 px-3 py-1 rounded-md text-sm">Lật thẻ</button>
+                                <p class="text-gray-600 mt-2 hidden">${quizJson.back}</p>
+                            </div>`;
+                    break;
+                default:
+                    html += `<p>Unsupported quiz type: ${quizJson.type}</p>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        /**
+         * Inserts the rendered quiz HTML back into the main content
+         * at the positions of their placeholders.
+         * @param {string} htmlContent The HTML content with placeholders.
+         * @param {Array<string>} extractedQuizzes Raw JSON strings of quizzes.
+         * @returns {string} HTML content with quizzes rendered.
+         */
+        function insertRenderedQuizzes(htmlContent, extractedQuizzes) {
+            let finalHtml = htmlContent;
+            extractedQuizzes.forEach((quizRaw, index) => {
+                const placeholder = `${QUIZ_PLACEHOLDER_PREFIX}${index}`;
+                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; // Default error message
+
+                try {
+                    const cleanedQuizRaw = cleanJSON(quizRaw);
+                    const quizJson = JSON.parse(cleanedQuizRaw);
+                    quizHtml = renderQuiz(quizJson); // Render the quiz
+                } catch (e) {
+                    console.error(`Error parsing or rendering quiz ${index}:`, e, "Raw JSON:", quizRaw);
+                }
+                finalHtml = finalHtml.replace(placeholder, quizHtml);
+            });
+            return finalHtml;
+        }
+
+        /**
+         * Handles the click event for learning-mode interactive links.
+         * Marks the topic as completed and sends a new prompt to AI.
+         * @param {HTMLElement} linkElement The clicked span.interactive-link element.
+         */
+        async function handleLearningPromptClick(linkElement) {
+            const dataPrompt = linkElement.dataset.prompt;
+            if (!dataPrompt) {
+                console.warn("Interactive link clicked without data-prompt.");
+                return;
+            }
+
+            const decodedPrompt = decodeURIComponent(dataPrompt);
+
+            // Mark as completed and update UI
+            if (!completedTopics.includes(decodedPrompt)) {
+                completedTopics.push(decodedPrompt);
+                linkElement.classList.add('completed-topic');
+                // You would typically save this to a persistent storage (e.g., Firebase, Local Storage) here.
+                // For this single-file MVP, it's session-only.
+                console.log("Completed topics:", completedTopics);
+            }
+
+            // Send the prompt to AI
+            await callGeminiAPI(decodedPrompt);
+        }
+
         // Hàm gọi API Gemini và xử lý phản hồi
-        async function callGeminiAPI() {
-            if (!model || !chat) { // Ensure both model and chat are initialized
+        async function callGeminiAPI(promptOverride = null) {
+            if (!model || !currentChatSession) {
                 updateStatus('text-red-600', "Mô hình AI hoặc phiên trò chuyện chưa được khởi tạo. Vui lòng kiểm tra console để biết lỗi.");
                 return;
             }
 
-            const promptText = promptInput.value.trim();
+            const promptText = promptOverride || promptInput.value.trim();
             if (!promptText) {
                 updateStatus('text-red-600', "Vui lòng nhập lời nhắc!");
                 return;
@@ -286,18 +578,21 @@
             // --- Start Loading State ---
             updateStatus('text-yellow-600', "Đang gửi yêu cầu đến Gemini...");
             
-            // Hide the initial placeholder if it's still visible
-            if (!responsePlaceholder.classList.contains('hidden')) {
-                responsePlaceholder.classList.add('hidden');
+            // Hide the placeholder of the active tab
+            if (currentActiveTab === 'solution' && !solutionPlaceholder.classList.contains('hidden')) {
+                solutionPlaceholder.classList.add('hidden');
+            } else if (currentActiveTab === 'review' && !reviewPlaceholder.classList.contains('hidden')) {
+                reviewPlaceholder.classList.add('hidden');
             }
 
             // Append user's message
             appendMessage(promptText, 'user-message');
-            promptInput.value = ''; // Clear input field
+            if (!promptOverride) { // Only clear input if not an internal override
+                promptInput.value = ''; 
+            }
 
             // Append AI's loading message placeholder
             const aiLoadingMessageDiv = appendMessage('', 'ai-message', true);
-
 
             buttonText.textContent = 'Đang gửi...';
             buttonSpinner.classList.remove('hidden');
@@ -305,57 +600,118 @@
             // --- End Loading State ---
 
             try {
-                // Use chat.sendMessage to maintain context
-                const result = await chat.sendMessage(promptText);
+                const result = await currentChatSession.sendMessage(promptText);
                 const response = result.response;
                 const text = response.text();
 
-                // Chuyển đổi Markdown thành HTML bằng marked.js
-                const htmlContent = marked.parse(text); 
+                // Step 1: Extract quiz blocks
+                const { cleanedText, extractedQuizzes } = extractAndReplaceQuizBlocks(text);
+
+                // Step 2: Preprocess custom interactive links (now checks for completed status)
+                const preprocessedText = preprocessText(cleanedText);
+
+                // Step 3: Convert Markdown to HTML
+                let htmlContent = marked.parse(preprocessedText); 
+
+                // Step 4: Insert rendered quizzes back into HTML
+                htmlContent = insertRenderedQuizzes(htmlContent, extractedQuizzes);
 
                 // Update the AI's loading message div with actual content
                 aiLoadingMessageDiv.innerHTML = htmlContent;
-                if (aiLoadingMessageDiv.spinner) { // Remove spinner if it exists
+                if (aiLoadingMessageDiv.spinner) {
                     aiLoadingMessageDiv.spinner.remove();
                 }
 
                 // Yêu cầu MathJax xử lý nội dung mới để render các công thức toán học
                 if (typeof MathJax !== 'undefined') {
-                    // Only typeset the newly added message div
                     await MathJax.typesetPromise([aiLoadingMessageDiv]);
                 } else {
                     console.warn("MathJax chưa được tải hoặc không khả dụng.");
                 }
 
+                // Attach event listeners to interactive links
+                aiLoadingMessageDiv.querySelectorAll('.interactive-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Prevent event from bubbling up to parent handlers if any
+                        handleLearningPromptClick(e.currentTarget);
+                    });
+                });
+                
+                // Add event listeners for flashcard flip (example)
+                aiLoadingMessageDiv.querySelectorAll('.flashcard button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const flashcard = e.target.closest('.flashcard');
+                        const backContent = flashcard.querySelector('.text-gray-600');
+                        if (backContent) {
+                            backContent.classList.toggle('hidden');
+                            e.target.textContent = backContent.classList.contains('hidden') ? 'Lật thẻ' : 'Ẩn đáp án';
+                        }
+                    });
+                });
+
+
                 // --- End Loading & Show Content State ---
-                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom after content is rendered
+                currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Response text:", text);
 
             } catch (error) {
                 console.error("Lỗi khi gọi Gemini API:", error);
-                // Update the AI's loading message div with error text
                 aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12) để biết thêm chi tiết.</p>`;
-                if (aiLoadingMessageDiv.spinner) { // Remove spinner if it exists
+                if (aiLoadingMessageDiv.spinner) {
                     aiLoadingMessageDiv.spinner.remove();
                 }
-                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight; // Scroll to bottom
+                currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
                 updateStatus('text-red-600', `Lỗi khi gọi Gemini API: ${error.message}.`);
             } finally {
-                buttonText.textContent = 'Gửi'; // Changed back to "Gửi"
+                buttonText.textContent = 'Gửi';
                 buttonSpinner.classList.add('hidden');
                 sendPromptButton.disabled = false;
-                promptInput.focus(); // Keep focus on input for continued conversation
+                promptInput.focus();
             }
         }
 
-        // Gán sự kiện click cho nút
+        // Tab switching function
+        function switchTab(tabName) {
+            currentActiveTab = tabName;
+
+            // Hide all content containers
+            solutionContent.classList.add('hidden');
+            reviewContent.classList.add('hidden');
+
+            // Deactivate all tab buttons
+            solutionTabBtn.classList.remove('text-blue-600', 'border-blue-600');
+            solutionTabBtn.classList.add('text-gray-600', 'border-transparent');
+            reviewTabBtn.classList.remove('text-blue-600', 'border-blue-600');
+            reviewTabBtn.classList.add('text-gray-600', 'border-transparent');
+
+            // Show selected tab content and activate button
+            if (tabName === 'solution') {
+                solutionContent.classList.remove('hidden');
+                solutionTabBtn.classList.add('text-blue-600', 'border-blue-600');
+                solutionTabBtn.classList.remove('text-gray-600', 'border-transparent');
+                currentChatSession = solutionChat;
+                currentContentContainerElement = solutionResponseContainer;
+            } else if (tabName === 'review') {
+                reviewContent.classList.remove('hidden');
+                reviewTabBtn.classList.add('text-blue-600', 'border-blue-600');
+                reviewTabBtn.classList.remove('text-gray-600', 'border-transparent');
+                currentChatSession = reviewChat;
+                currentContentContainerElement = reviewResponseContainer;
+            }
+            
+            // Adjust layout after tab switch to ensure correct padding for footer
+            adjustLayout();
+            currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight; // Scroll to bottom of new tab
+        }
+
+        // Gán sự kiện click cho nút Gửi
         if (sendPromptButton) {
-            sendPromptButton.addEventListener("click", callGeminiAPI);
+            sendPromptButton.addEventListener("click", () => callGeminiAPI(null));
             promptInput.addEventListener("keydown", (event) => {
-                if (event.key === "Enter" && !event.shiftKey) { // Gửi khi nhấn Enter, không gửi khi nhấn Shift+Enter
-                    event.preventDefault(); // Ngăn xuống dòng mặc định trong textarea
-                    callGeminiAPI();
+                if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    callGeminiAPI(null);
                 }
             });
         } else {
@@ -363,24 +719,35 @@
             updateStatus('text-red-600', "Không tìm thấy nút gửi. Lỗi HTML?");
         }
 
+        // Gán sự kiện click cho nút tab
+        if (solutionTabBtn) {
+            solutionTabBtn.addEventListener("click", () => switchTab('solution'));
+        }
+        if (reviewTabBtn) {
+            reviewTabBtn.addEventListener("click", () => switchTab('review'));
+        }
+
         // --- Layout Adjustment and Back to Top Button Logic ---
         function adjustLayout() {
             const footerHeight = chatInputFooter.offsetHeight;
             // Add padding to the scrollable chat container to prevent content from being hidden by the fixed footer
-            // Add an extra 20px for visual margin
-            chatMessagesContainer.style.paddingBottom = `${footerHeight + 20}px`; 
+            // Use the currently active content container
+            solutionResponseContainer.style.paddingBottom = `${footerHeight + 20}px`; 
+            reviewResponseContainer.style.paddingBottom = `${footerHeight + 20}px`;
 
             // Position the back to top button above the footer
-            backToTopBtn.style.bottom = `${footerHeight + 20}px`; // 20px above the footer
+            backToTopBtn.style.bottom = `${footerHeight + 20}px`;
         }
 
-        window.addEventListener('load', adjustLayout);
+        window.addEventListener('load', () => {
+            adjustLayout(); // Initial layout adjustment
+            switchTab('solution'); // Ensure "Lời giải" tab is active on load
+        });
         window.addEventListener('resize', adjustLayout); // Re-adjust on window resize
 
         window.addEventListener('scroll', () => {
             // Show/hide back to top button based on scroll position
-            // Use window.pageYOffset for overall page scroll
-            if (window.pageYOffset > responseContainer.clientHeight / 2) { 
+            if (window.pageYOffset > window.innerHeight / 2) { // Show if scrolled down past half viewport height
                 backToTopBtn.classList.add('show');
             } else {
                 backToTopBtn.classList.remove('show');
@@ -397,4 +764,3 @@
     </script>
 </body>
 </html>
-```
