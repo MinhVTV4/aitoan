@@ -26,6 +26,23 @@
             font-family: sans-serif;
             background-color: #f4f4f4;
         }
+        button {
+            transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+            box-shadow: 0 3px 1px -2px rgba(0,0,0,.2), 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12);
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 5px -3px rgba(0,0,0,.2), 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12);
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px -1px rgba(0,0,0,.2), 0 4px 5px 0 rgba(0,0,0,.14), 0 1px 10px 0 rgba(0,0,0,.12);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
             border-left-color: #fff;
@@ -296,6 +313,7 @@
         let currentContentContainerElement;
         let currentActiveTab = 'solution'; // Default active tab
         let completedTopics = []; // NEW: Stores prompts of completed learning topics
+        let lastUserMessageElement = null; // NEW: Stores reference to the last user message element
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
@@ -346,8 +364,8 @@
         \`\`\`
     * **Các loại quiz hỗ trợ:** "multiple_choice", "fill_in_the_blank", "short_answer", "flashcard".
     * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON. Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la.
-3.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối.
-4.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
+4.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối.
+5.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
 
 Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải nghiệm tương tác liền mạch cho người dùng.
 `;
@@ -391,8 +409,15 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             messageDiv.classList.add('chat-message', senderType);
 
             if (isLoading) {
-                messageDiv.innerHTML = `<div class="large-spinner"></div>`;
-                messageDiv.spinner = messageDiv.querySelector('.large-spinner');
+                const spinnerDiv = document.createElement('div');
+                spinnerDiv.classList.add('large-spinner');
+                messageDiv.appendChild(spinnerDiv);
+                messageDiv.spinner = spinnerDiv; // Store reference to spinner
+                
+                const textSpan = document.createElement('span'); // Span to stream text into
+                textSpan.classList.add('ml-3'); // Add some margin from spinner
+                messageDiv.appendChild(textSpan);
+                messageDiv.streamingTextSpan = textSpan; // Store reference to text span
             } else {
                 messageDiv.innerHTML = text;
             }
@@ -477,9 +502,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return html;
         }
 
-        // =================================================================================
-        // *** HÀM ĐÃ CẬP NHẬT ***
-        // =================================================================================
         /**
          * Chèn các khối quiz đã được render vào nội dung HTML.
          * Hàm này có thể xử lý cả đối tượng JSON đơn lẻ và mảng các đối tượng JSON.
@@ -568,62 +590,77 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 return;
             }
 
-            updateStatus('text-yellow-600', "Đang gửi yêu cầu đến Gemini...");
-            
-            if (currentActiveTab === 'solution') solutionPlaceholder.classList.add('hidden');
-            else reviewPlaceholder.classList.add('hidden');
+            // Append user message and store its reference
+            const userMessageDiv = appendMessage(promptText, 'user-message');
+            lastUserMessageElement = userMessageDiv; // Store the reference to the user's message
 
-            appendMessage(promptText, 'user-message');
             if (!promptOverride) {
                 promptInput.value = ''; 
             }
 
-            const aiLoadingMessageDiv = appendMessage('', 'ai-message', true);
+            const aiLoadingMessageDiv = appendMessage('', 'ai-message', true); // Pass true for isLoading
+            let fullResponseBuffer = ''; // Buffer to accumulate the full response text
 
             buttonText.textContent = 'Đang gửi...';
             buttonSpinner.classList.remove('hidden');
             sendPromptButton.disabled = true;
 
             try {
-                const result = await currentChatSession.sendMessage(promptText);
-                const response = result.response;
-                const text = response.text();
+                // Use sendMessageStream for streaming responses
+                const streamResult = await currentChatSession.sendMessageStream(promptText);
 
-                const { cleanedText, extractedQuizzes } = extractAndReplaceQuizBlocks(text);
+                for await (const chunk of streamResult.stream) {
+                    const chunkText = chunk.text();
+                    fullResponseBuffer += chunkText;
+                    // Append text to the streaming span
+                    if (aiLoadingMessageDiv.streamingTextSpan) {
+                        aiLoadingMessageDiv.streamingTextSpan.textContent = fullResponseBuffer;
+                    }
+                    currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight; // Keep scrolling to bottom
+                }
+
+                // After the stream completes, remove the spinner
+                if (aiLoadingMessageDiv.spinner) {
+                    aiLoadingMessageDiv.spinner.remove();
+                    aiLoadingMessageDiv.streamingTextSpan.classList.remove('ml-3'); // Remove margin if spinner is gone
+                }
+
+                // Process the full accumulated response
+                const { cleanedText, extractedQuizzes } = extractAndReplaceQuizBlocks(fullResponseBuffer);
                 const preprocessedText = preprocessText(cleanedText);
                 let htmlContent = marked.parse(preprocessedText); 
                 htmlContent = insertRenderedQuizzes(htmlContent, extractedQuizzes);
 
+                // Update the innerHTML of the message div with the fully processed content
                 aiLoadingMessageDiv.innerHTML = htmlContent;
-                if (aiLoadingMessageDiv.spinner) {
-                    aiLoadingMessageDiv.spinner.remove();
-                }
 
+                // Re-typeset MathJax for the new content
                 if (typeof MathJax !== 'undefined') {
                     await MathJax.typesetPromise([aiLoadingMessageDiv]);
                 } else {
                     console.warn("MathJax is not available.");
                 }
 
+                // Add event listeners for interactive links and quizzes to the new content
                 aiLoadingMessageDiv.querySelectorAll('.interactive-link').forEach(link => {
                     link.addEventListener('click', (e) => {
                         e.stopPropagation();
                         handleLearningPromptClick(e.currentTarget);
                     });
                 });
-                
                 addQuizEventListeners(aiLoadingMessageDiv);
 
                 currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
-                console.log("Response text:", text);
+                console.log("Full response text:", fullResponseBuffer);
 
             } catch (error) {
                 console.error("Lỗi khi gọi Gemini API:", error);
-                aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12).</p>`;
+                // Ensure spinner is removed and error message is displayed even if stream fails midway
                 if (aiLoadingMessageDiv.spinner) {
                     aiLoadingMessageDiv.spinner.remove();
                 }
+                aiLoadingMessageDiv.innerHTML = `<p class="text-red-500">Lỗi: ${error.message}. Vui lòng kiểm tra Console (F12).</p>`;
                 currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
                 updateStatus('text-red-600', `Lỗi khi gọi Gemini API: ${error.message}.`);
             } finally {
@@ -631,6 +668,11 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 buttonSpinner.classList.add('hidden');
                 sendPromptButton.disabled = false;
                 promptInput.focus();
+
+                // NEW: Scroll back to the last user message element
+                if (lastUserMessageElement) {
+                    lastUserMessageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
             }
         }
 
