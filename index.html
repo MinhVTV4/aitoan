@@ -307,31 +307,27 @@
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
         const BASIC_LINK_REGEX = /\[(.*?)\]/g;
 
+        // ***FIX: Corrected the system prompt to allow LaTeX in JSON***
         const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
 **Quy tắc phản hồi chính:**
 1.  **Lộ trình ôn tập:** Khi người dùng yêu cầu lộ trình ôn tập, bạn phải trả về một danh sách các mục ôn tập dưới dạng Markdown. **Cực kỳ quan trọng: Mỗi mục trong danh sách này phải là một liên kết tương tác với một lời nhắc (prompt) ẩn đi để yêu cầu giải thích lý thuyết chi tiết về mục đó.**
     * **Định dạng liên kết tương tác PHẢI là:** \`[Tên mục ôn tập]{"prompt":"Giải thích chi tiết về [Tên mục ôn tập] bao gồm định nghĩa, công thức, tính chất và các ví dụ minh họa."}\`
-    * **Ví dụ về liên kết lý thuyết (TUÂN THỦ NGHIÊM NGẶT):**
-        * \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
-        * \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
 2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown. Nếu người dùng yêu cầu nhiều câu hỏi, bạn có thể trả về một mảng các đối tượng JSON.
     * **Định dạng khối mã PHẢI là:** Khối mã PHẢI bắt đầu bằng \`\`\`quiz trên một dòng riêng và kết thúc bằng \`\`\` trên một dòng riêng. TOÀN BỘ nội dung JSON (một đối tượng hoặc một mảng các đối tượng) phải nằm giữa hai dòng này.
-    * **Ví dụ định dạng đúng (TUÂN THỦ NGHIÊM NGẶT):**
+    * **Ví dụ định dạng đúng:**
         \`\`\`quiz
         {
             "type": "multiple_choice",
             "title": "Câu hỏi về Đạo hàm",
-            "question": "Đạo hàm của hàm số y = x^3 là gì?",
-            "options": ["3x^2", "x^2", "3x"],
-            "answer": "3x^2",
-            "explanation": "Áp dụng công thức (x^n)' = n*x^(n-1), ta có (x^3)' = 3*x^(3-1) = 3x^2."
+            "question": "Đạo hàm của hàm số $y = x^3$ là gì?",
+            "options": ["$3x^2$", "$x^2$", "$3x$"],
+            "answer": "$3x^2$",
+            "explanation": "Áp dụng công thức $(x^n)' = n*x^{n-1}$, ta có $(x^3)' = 3*x^{3-1} = 3x^2$."
         }
         \`\`\`
-    * **Các loại quiz hỗ trợ:** "multiple_choice", "fill_in_the_blank", "short_answer", "flashcard".
-    * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON. Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la.
-3.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối.
-4.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
+    * **Quan trọng:** Các giá trị chuỗi bên trong JSON (question, options, answer, etc.) phải là văn bản thuần túy. Tuy nhiên, bạn **PHẢI** sử dụng dấu đô la (ví dụ: \`$x^2$\` cho công thức nội dòng và \`$$...$$\` cho công thức khối) để bao bọc **TẤT CẢ** các công thức và biểu thức toán học bên trong các chuỗi JSON này để chúng có thể được hiển thị đúng.
+3.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
 
 Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải nghiệm tương tác liền mạch cho người dùng.
 `;
@@ -409,17 +405,11 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return processedText;
         }
 
-        // ***FIX: Enhanced cleanJSON to handle bad escape characters***
         function cleanJSON(jsonString) {
             let cleaned = jsonString.trim();
-            // Remove comments
             cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-            // Replace smart quotes
             cleaned = cleaned.replace(/[“”‘’]/g, '"');
-            // Remove trailing commas
             cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
-            // Escape unescaped backslashes that are not part of a valid escape sequence.
-            // This prevents errors when the AI includes single backslashes in strings (e.g., for LaTeX).
             cleaned = cleaned.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
             return cleaned;
         }
