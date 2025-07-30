@@ -11,7 +11,7 @@
         window.MathJax = {
             tex: {
                 inlineMath: [['$', '$'], ['\\(', '\\)']], // Use $...$ and \(...)\ for inline math
-                displayMath: [['$$', '$$'], ['\\[', '\\]']], // Use $$...$$ and \[...\] for display math
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], // Use $$...$$ and \[...\\] for display math
                 processEscapes: true, // Allows using \$ for a literal dollar sign
                 processEnvironments: true, // Enables LaTeX environments like \begin{align}
             },
@@ -187,13 +187,47 @@
             color: #60a5fa; /* Muted blue */
             border-color: #93c5fd; /* Muted border blue */
         }
+
+        /* Saved list item styling */
+        .saved-item-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75em 1em;
+            margin-bottom: 0.5em;
+            background-color: #f0f9ff; /* Tailwind blue-50 */
+            border: 1px solid #dbeafe; /* Tailwind blue-100 */
+            border-radius: 0.5em;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        .saved-item-entry:hover {
+            background-color: #e0f2fe; /* Tailwind blue-100 */
+            transform: translateY(-1px);
+        }
+        .saved-item-entry:active {
+            transform: translateY(0);
+        }
+        .saved-item-entry .title {
+            font-weight: 500;
+            color: #1e40af; /* Tailwind blue-900 */
+        }
+        .saved-item-entry .type {
+            font-size: 0.8em;
+            color: #60a5fa; /* Tailwind blue-400 */
+            background-color: #bfdbfe; /* Tailwind blue-200 */
+            padding: 0.2em 0.5em;
+            border-radius: 0.25em;
+            margin-left: 1em;
+        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen items-center">
     <!-- NEW: Application Header -->
     <header id="headerEl" class="w-full bg-blue-800 text-white p-4 shadow-lg flex flex-col sm:flex-row justify-between items-center z-30">
         <div id="appTitleGroup" class="text-center sm:text-left mb-2 sm:mb-0">
-            <h1 class="text-3xl font-extrabold text-white mb-1">Ứng dụng AI Toán học</h1
+            <h1 class="text-3xl font-extrabold text-white mb-1">Ứng dụng AI Toán học</h1>
+            <h2 class="text-md text-blue-200">(Gemini 1.5 Flash & MathJax)</h2>
         </div>
         
         <!-- NEW: User Auth Display & Controls (hidden by default, shown on login) -->
@@ -244,8 +278,11 @@
             <button id="solutionTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-blue-600 border-b-2 border-blue-600 hover:bg-blue-50 focus:outline-none rounded-tl-xl">
                 Lời giải
             </button>
-            <button id="reviewTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none rounded-tr-xl">
+            <button id="reviewTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none">
                 Ôn tập
+            </button>
+            <button id="savedTabBtn" class="flex-1 px-6 py-3 text-lg font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none rounded-tr-xl">
+                Đã lưu
             </button>
         </div>
 
@@ -275,6 +312,21 @@
                 <p class="text-sm text-gray-600 mt-4 italic text-center">
                     Ví dụ: "Tạo lộ trình ôn tập môn Toán lớp 12 chương Giải tích". Hoặc "Tạo 3 câu hỏi trắc nghiệm về đạo hàm".
                 </p>
+            </div>
+
+            <!-- NEW: Saved Content (initially hidden) -->
+            <div id="savedContent" class="flex-grow flex-col hidden">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-3">Mục đã lưu</h3>
+                <div id="savedListContainer" class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative chat-container-content">
+                    <p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>
+                    <!-- Saved items will be dynamically added here -->
+                </div>
+                <div id="savedDetailContainer" class="flex-grow flex-col hidden p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative chat-container-content">
+                    <button id="backToSavedListBtn" class="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm mb-4">← Quay lại danh sách</button>
+                    <div id="savedItemDetail">
+                        <!-- Detailed content of a saved item will be rendered here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -318,18 +370,18 @@
         import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-ai.js";
         // NEW: Import Firebase Authentication modules
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
-        // NEW: Import Firebase Firestore modules (placeholder for now)
-        // import { getFirestore, doc, setDoc, updateDoc, collection, query, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+        // NEW: Import Firebase Firestore modules
+        import { getFirestore, doc, setDoc, updateDoc, collection, query, orderBy, getDocs, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 
         // Cấu hình Firebase của bạn (giữ nguyên như bạn đã cung cấp)
         const firebaseConfig = {
-            apiKey: "AIzaSyAI2tN9qy9JqCySLkbTRqgGALlJfuTjg88",
-            authDomain: "shopee-3eabb.firebaseapp.com",
-            projectId: "shopee-3eabb",
-            storageBucket: "shopee-3eabb.firebasestorage.app",
-            messagingSenderId: "19651189872",
-            appId: "1:19651189872:web:fb0fff66e8c98ceb5928b5"
+            apiKey: "AIzaSyANAYB1rV8Zj3_a_9QyQd3gYus2BtGOh-I",
+            authDomain: "aitoan.firebaseapp.com",
+            projectId: "aitoan",
+            storageBucket: "aitoan.firebasestorage.app",
+            messagingSenderId: "610699813568",
+            appId: "1:610699813568:web:fca3ff4fc698598608c325"
         };
 
         // Khởi tạo ứng dụng Firebase
@@ -345,18 +397,31 @@
         // Tab and Content Elements
         const solutionTabBtn = document.getElementById('solutionTabBtn');
         const reviewTabBtn = document.getElementById('reviewTabBtn');
+        // NEW: Saved Tab elements
+        const savedTabBtn = document.getElementById('savedTabBtn');
         const solutionContent = document.getElementById('solutionContent');
         const reviewContent = document.getElementById('reviewContent');
+        const savedContent = document.getElementById('savedContent'); // New Saved content wrapper
+
         const solutionResponseContainer = document.getElementById('solutionResponseContainer');
         const reviewResponseContainer = document.getElementById('reviewResponseContainer');
+        // NEW: Saved Content Containers
+        const savedListContainer = document.getElementById('savedListContainer');
+        const savedDetailContainer = document.getElementById('savedDetailContainer');
+        const savedItemDetail = document.getElementById('savedItemDetail');
+        const backToSavedListBtn = document.getElementById('backToSavedListBtn');
+
+
         const solutionPlaceholder = document.getElementById('solutionPlaceholder');
         const reviewPlaceholder = document.getElementById('reviewPlaceholder');
+        const savedPlaceholder = document.getElementById('savedPlaceholder'); // New saved placeholder
+
 
         const chatInputFooter = document.getElementById('chatInputFooter');
         const backToTopBtn = document.getElementById('backToTopBtn');
         const statusMessage = document.getElementById('statusMessage');
 
-        // NEW: Auth DOM Elements for Login Form
+        // Auth DOM Elements for Login Form
         const authSection = document.getElementById('authSection');
         const authStatus = document.getElementById('authStatus');
         const signInForm = document.getElementById('signInForm');
@@ -365,7 +430,7 @@
         const signInBtn = document.getElementById('signInBtn');
         const signUpBtn = document.getElementById('signUpBtn');
 
-        // NEW: Auth/User Display Elements for Header
+        // Auth/User Display Elements for Header
         const headerEl = document.getElementById('headerEl');
         const appTitleGroup = document.getElementById('appTitleGroup');
         const userAuthDisplay = document.getElementById('userAuthDisplay');
@@ -378,7 +443,7 @@
         // Global state for current chat session and content container
         let model;
         let auth; // Firebase Auth instance
-        // let db; // Firestore instance (to be initialized later)
+        let db; // Firebase Firestore instance
         let currentUserUid = null; // Stores the current user's UID
         let solutionChat = null; // Initialized on auth state change
         let reviewChat = null;   // Initialized on auth state change
@@ -392,6 +457,7 @@
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
         const QUIZ_BLOCK_REGEX = /```(?:quiz|json)\n([\s\S]*?)\n```/g;
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
+        const LEARNING_PATH_REGEX = /^- \[.*?\]\{"prompt":".*?"\}$/gm; // Regex to detect learning path structure
 
         const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
@@ -448,17 +514,73 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             statusMessage.innerHTML = message;
         }
 
-        // NEW: Placeholder for saving data (to be implemented with Firestore)
-        async function handleSaveSession() {
-            if (!currentUserUid) {
-                updateStatus('text-red-600', "Bạn cần đăng nhập để lưu phiên.");
+        // NEW: Function to save a single message to Firestore
+        async function saveMessageToFirestore(chatType, role, text, htmlContent) {
+            if (!currentUserUid || !db) {
+                console.warn("Không thể lưu tin nhắn: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
                 return;
             }
-            // Logic để lưu completedTopics, lịch sử chat vào Firestore sẽ ở đây.
-            // Ví dụ: saveChatHistoryToFirestore('solution', solutionChat.getHistory());
-            // saveUserDataToFirestore(); // for completedTopics and currentActiveTab
-            console.log("Tính năng lưu phiên sẽ được phát triển sau.");
-            updateStatus('text-green-600', "Đã yêu cầu lưu phiên (chức năng đang được phát triển).");
+            try {
+                await addDoc(collection(db, 'users', currentUserUid, 'chats', chatType, 'messages'), {
+                    role: role,
+                    text: text, // Raw text from user or AI
+                    htmlContent: htmlContent, // Rendered HTML for display
+                    timestamp: serverTimestamp() // Use server timestamp for consistent ordering
+                });
+                console.log(`Tin nhắn [${chatType}] đã lưu vào Firestore.`);
+            } catch (e) {
+                console.error("Lỗi khi lưu tin nhắn vào Firestore:", e);
+                updateStatus('text-red-600', `Lỗi lưu tin nhắn: ${e.message}`);
+            }
+        }
+
+        // NEW: Function to save user data (active tab, completed topics) to Firestore
+        async function saveUserDataToFirestore() {
+            if (!currentUserUid || !db) {
+                updateStatus('text-red-600', "Không thể lưu dữ liệu: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
+                return;
+            }
+            try {
+                // Use setDoc with merge: true to update specific fields without overwriting the entire document
+                await setDoc(doc(db, 'users', currentUserUid, 'user_data', 'settings'), {
+                    lastActiveTab: currentActiveTab,
+                    completedTopics: completedTopics,
+                    lastSaved: serverTimestamp()
+                }, { merge: true });
+                updateStatus('text-green-600', "Dữ liệu phiên đã được lưu thành công!");
+                console.log("Dữ liệu người dùng đã lưu vào Firestore.");
+            } catch (e) {
+                console.error("Lỗi khi lưu dữ liệu người dùng vào Firestore:", e);
+                updateStatus('text-red-600', `Lỗi lưu dữ liệu: ${e.message}`);
+            }
+        }
+
+        // NEW: Function to save an artifact (learning path or quiz) to Firestore
+        async function saveArtifactToFirestore(title, type, rawContent, htmlContent, originalPrompt) {
+            if (!currentUserUid || !db) {
+                updateStatus('text-red-600', "Không thể lưu mục: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
+                return;
+            }
+            try {
+                await addDoc(collection(db, 'users', currentUserUid, 'saved_artifacts'), {
+                    title: title,
+                    type: type,
+                    rawContent: rawContent,
+                    htmlContent: htmlContent,
+                    originalPrompt: originalPrompt,
+                    createdAt: serverTimestamp()
+                });
+                updateStatus('text-green-600', `"${title}" đã được lưu vào kho của bạn.`);
+                console.log("Mục đã lưu:", { title, type });
+            } catch (e) {
+                console.error("Lỗi khi lưu mục vào Firestore:", e);
+                updateStatus('text-red-600', `Lỗi lưu mục: ${e.message}`);
+            }
+        }
+
+        // NEW: Placeholder for saving data (now calls saveUserDataToFirestore)
+        async function handleSaveSession() {
+            await saveUserDataToFirestore();
         }
 
 
@@ -541,8 +663,212 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             }
         }
 
+        // NEW: Function to load saved artifacts from Firestore
+        async function loadSavedArtifactsList() {
+            if (!currentUserUid || !db) {
+                console.warn("Không thể tải mục đã lưu: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
+                savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Vui lòng đăng nhập để xem các mục đã lưu.</p>`;
+                return;
+            }
+
+            savedListContainer.innerHTML = ''; // Clear previous list
+            savedDetailContainer.classList.add('hidden'); // Hide detail view
+            savedListContainer.classList.remove('hidden'); // Show list container
+
+            const loadedArtifacts = [];
+            try {
+                const artifactsRef = collection(db, 'users', currentUserUid, 'saved_artifacts');
+                const q = query(artifactsRef, orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>`;
+                    return;
+                }
+
+                querySnapshot.forEach(doc => {
+                    const artifact = { id: doc.id, ...doc.data() };
+                    loadedArtifacts.push(artifact);
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.classList.add('saved-item-entry');
+                    itemDiv.innerHTML = `
+                        <span class="title">${artifact.title}</span>
+                        <span class="type">${artifact.type === 'learning_path' ? 'Lộ trình' : (artifact.type === 'quiz' ? 'Bài tập' : 'Khác')}</span>
+                    `;
+                    itemDiv.addEventListener('click', () => displaySavedArtifact(artifact));
+                    savedListContainer.appendChild(itemDiv);
+                });
+                console.log("Mục đã lưu đã tải:", loadedArtifacts);
+            } catch (e) {
+                console.error("Lỗi khi tải mục đã lưu từ Firestore:", e);
+                savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-red-500 text-center w-full mt-auto mb-auto">Lỗi khi tải mục đã lưu: ${e.message}</p>`;
+            }
+        }
+
+        // NEW: Function to display a single saved artifact in detail view
+        async function displaySavedArtifact(artifact) {
+            savedListContainer.classList.add('hidden');
+            savedDetailContainer.classList.remove('hidden');
+            savedItemDetail.innerHTML = artifact.htmlContent; // Display pre-rendered HTML
+
+            if (typeof MathJax !== 'undefined') {
+                await MathJax.typesetPromise([savedItemDetail]);
+            } else {
+                console.warn("MathJax is not available for saved item detail.");
+            }
+            addQuizEventListeners(savedItemDetail); // Re-attach quiz event listeners
+            savedItemDetail.querySelectorAll('.interactive-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // For saved items, interactive links might trigger new calls.
+                    // Decide if you want to allow this or make them read-only.
+                    // For now, let's just log or prevent default.
+                    console.log("Interactive link clicked in saved item:", link.dataset.prompt);
+                    // To make them trigger new sessions like before:
+                    // handleLearningPromptClick(e.currentTarget);
+                });
+            });
+
+            savedDetailContainer.scrollTop = 0; // Scroll to top of detail view
+        }
+
+        // NEW: Button to go back from detail view to list view
+        backToSavedListBtn.addEventListener('click', () => {
+            savedDetailContainer.classList.add('hidden');
+            savedListContainer.classList.remove('hidden');
+            savedListContainer.scrollTop = 0; // Scroll list to top
+        });
+
+
+        // NEW: Function to load user data and chat history from Firestore
+        async function loadUserDataAndChats() {
+            if (!currentUserUid || !db) {
+                console.warn("Không thể tải dữ liệu: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
+                return;
+            }
+
+            updateStatus('text-blue-600', "Đang tải dữ liệu phiên...");
+
+            // Clear existing UI messages before loading new ones
+            solutionResponseContainer.innerHTML = '';
+            reviewResponseContainer.innerHTML = '';
+            completedTopics = []; // Clear current topics
+
+            // --- Load User Settings ---
+            try {
+                const userSettingsRef = doc(db, 'users', currentUserUid, 'user_data', 'settings');
+                const userSettingsSnap = await getDoc(userSettingsRef); 
+                if (userSettingsSnap.exists()) {
+                    const data = userSettingsSnap.data();
+                    currentActiveTab = data.lastActiveTab || 'solution';
+                    completedTopics = data.completedTopics || [];
+                    console.log("Dữ liệu người dùng đã tải:", data);
+                } else {
+                    console.log("Không tìm thấy dữ liệu cài đặt người dùng.");
+                }
+            } catch (e) {
+                console.error("Lỗi khi tải dữ liệu cài đặt người dùng:", e);
+                updateStatus('text-red-600', `Lỗi tải cài đặt: ${e.message}`);
+            }
+
+            // --- IMPORTANT FIX: Set the active tab and content container BEFORE appending messages ---
+            // This ensures currentContentContainerElement is correctly set before messages are appended.
+            switchTab(currentActiveTab); 
+
+            // --- Load Chat Histories ---
+            const loadedSolutionHistory = [];
+            const loadedReviewHistory = [];
+            
+            try {
+                // Load Solution Chat History
+                const solutionMessagesRef = collection(db, 'users', currentUserUid, 'chats', 'solution', 'messages');
+                const qSolution = query(solutionMessagesRef, orderBy('timestamp'));
+                const solutionQuerySnapshot = await getDocs(qSolution);
+
+                solutionQuerySnapshot.forEach(doc => {
+                    const msg = doc.data();
+                    // Append message to UI without saving back to Firestore (false)
+                    appendMessage(msg.htmlContent, `${msg.role}-message`, false, false); // Pass false for saveToFirestore
+                    // Add to history for Gemini session initialization
+                    loadedSolutionHistory.push({ role: msg.role, parts: [{ text: msg.text }] });
+                });
+                console.log("Lịch sử chat Lời giải đã tải:", loadedSolutionHistory);
+
+                // Load Review Chat History
+                const reviewMessagesRef = collection(db, 'users', currentUserUid, 'chats', 'review', 'messages');
+                const qReview = query(reviewMessagesRef, orderBy('timestamp'));
+                const reviewQuerySnapshot = await getDocs(qReview);
+
+                reviewQuerySnapshot.forEach(doc => {
+                    const msg = doc.data();
+                    // Append message to UI without saving back to Firestore (false)
+                    appendMessage(msg.htmlContent, `${msg.role}-message`, false, false); // Pass false for saveToFirestore
+                    // Add to history for Gemini session initialization
+                    loadedReviewHistory.push({ role: msg.role, parts: [{ text: msg.text }] });
+                });
+                console.log("Lịch sử chat Ôn tập đã tải:", loadedReviewHistory);
+
+                // Re-initialize Gemini chat sessions with loaded history
+                solutionChat = model.startChat({ history: loadedSolutionHistory });
+                reviewChat = model.startChat({
+                    history: [
+                        { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
+                        { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] },
+                        ...loadedReviewHistory // Append loaded history after system prompt
+                    ]
+                });
+
+                // Re-apply completed topic styles after loading
+                solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
+                    const decodedPrompt = decodeURIComponent(link.dataset.prompt);
+                    if (completedTopics.includes(decodedPrompt)) {
+                        link.classList.add('completed-topic');
+                    }
+                });
+                reviewResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
+                    const decodedPrompt = decodeURIComponent(link.dataset.prompt);
+                    if (completedTopics.includes(decodedPrompt)) {
+                        link.classList.add('completed-topic');
+                    }
+                });
+
+
+                // Add event listeners for interactive links and quizzes to the re-rendered content
+                solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        handleLearningPromptClick(e.currentTarget);
+                    });
+                });
+                reviewResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        handleLearningPromptClick(e.currentTarget);
+                    });
+                });
+                addQuizEventListeners(solutionResponseContainer);
+                addQuizEventListeners(reviewResponseContainer);
+
+                updateStatus('text-green-600', "Dữ liệu phiên đã tải và sẵn sàng.");
+
+            } catch (e) {
+                console.error("Lỗi khi tải lịch sử chat từ Firestore:", e);
+                updateStatus('text-red-600', `Lỗi tải lịch sử chat: ${e.message}`);
+                // Re-init chat sessions with empty history if loading fails
+                solutionChat = model.startChat();
+                reviewChat = model.startChat({
+                    history: [
+                        { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
+                        { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] }
+                    ]
+                });
+            }
+        }
+
+
         // NEW: Function to update UI based on auth state
-        function updateAuthUI(user) {
+        async function updateAuthUI(user) {
             if (user) {
                 // User is signed in
                 currentUserUid = user.uid;
@@ -557,24 +883,12 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 sendPromptButton.disabled = false;
                 backToTopBtn.disabled = false;
 
-                // Only start chat sessions if they haven't been started for this user or explicitly cleared
-                if (!solutionChat) {
-                    solutionChat = model.startChat();
-                    console.log("Solution chat session started for user:", currentUserUid);
-                }
-                if (!reviewChat) {
-                    reviewChat = model.startChat({
-                        history: [
-                            { role: "user", parts: [{ text: LEARNING_MODE_SYSTEM_PROMPT }] },
-                            { role: "model", parts: [{ text: "Tôi đã hiểu vai trò của mình là trợ lý ôn tập. Hãy cho tôi biết bạn muốn ôn tập chủ đề gì hoặc tạo câu hỏi như thế nào!" }] }
-                        ]
-                    });
-                    console.log("Review chat session started for user:", currentUserUid);
-                }
-
+                updateStatus('text-blue-600', `Chào mừng ${user.email || 'người dùng'}. Đang tải phiên của bạn...`);
+                // Call load function after successful login
+                await loadUserDataAndChats(); 
+                await loadSavedArtifactsList(); // Load saved items too
                 updateStatus('text-green-600', `Chào mừng ${user.email || 'người dùng'}. Sẵn sàng gửi yêu cầu.`);
-                switchTab(currentActiveTab); // Re-render current tab and ensure placeholders are shown/hidden correctly
-
+                
             } else {
                 // User is signed out
                 currentUserUid = null;
@@ -597,13 +911,16 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 backToTopBtn.disabled = true;
 
                 // Clear chat sessions and content
-                solutionChat = null;
+                solutionChat = null; // Ensure sessions are reset
                 reviewChat = null;
                 solutionResponseContainer.innerHTML = `<p id="solutionPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>`;
                 reviewResponseContainer.innerHTML = `<p id="reviewPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Nhập yêu cầu để tạo lộ trình ôn tập hoặc câu hỏi...</p>`;
+                savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>`;
+                savedDetailContainer.classList.add('hidden'); // Ensure detail view is hidden
                 completedTopics = []; // Clear completed topics
 
                 updateStatus('text-gray-600', "Bạn cần đăng nhập để bắt đầu.");
+                switchTab('solution'); // Default to solution tab and clear it
             }
         }
 
@@ -615,7 +932,11 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
             console.log("Generative Model instance created!");
             
-            // NEW: Init Auth and listen for state changes
+            // NEW: Init Firestore
+            db = getFirestore(app);
+            console.log("Firestore DB initialized!");
+
+            // Init Auth and listen for state changes
             auth = getAuth(app);
             onAuthStateChanged(auth, updateAuthUI); // This will trigger updateAuthUI on load
 
@@ -630,15 +951,24 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             authSection.classList.remove('hidden'); // Show auth section so user knows there's an issue
         }
 
-        function appendMessage(text, senderType, isLoading = false) {
-            // Remove placeholder if present
-            if (solutionPlaceholder && solutionPlaceholder.parentNode === currentContentContainerElement) {
-                solutionPlaceholder.remove();
-            }
-            if (reviewPlaceholder && reviewPlaceholder.parentNode === currentContentContainerElement) {
-                reviewPlaceholder.remove();
+        // Modified appendMessage to optionally save to Firestore
+        function appendMessage(text, senderType, isLoading = false, saveToFirestore = true) {
+            // Determine which placeholder to check based on currentContentContainerElement
+            let placeholderEl = null;
+            if (currentContentContainerElement === solutionResponseContainer && solutionPlaceholder) {
+                placeholderEl = solutionPlaceholder;
+            } else if (currentContentContainerElement === reviewResponseContainer && reviewPlaceholder) {
+                placeholderEl = reviewPlaceholder;
+            } else if (currentContentContainerElement === savedListContainer && savedPlaceholder) { // For saved list
+                placeholderEl = savedPlaceholder;
+            } else if (currentContentContainerElement === savedItemDetail) { // For saved item detail
+                // No placeholder to remove here
             }
 
+            if (placeholderEl && placeholderEl.parentNode === currentContentContainerElement) {
+                placeholderEl.remove();
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('chat-message', senderType);
 
@@ -658,8 +988,87 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             
             currentContentContainerElement.appendChild(messageDiv);
             currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
+
+            if (!isLoading && saveToFirestore) {
+                // If this is a user message or final AI response, save it
+                const chatType = currentActiveTab; // 'solution' or 'review'
+                // The 'text' argument is the raw text, messageDiv.innerHTML is the rendered htmlContent
+                saveMessageToFirestore(chatType, senderType === 'user-message' ? 'user' : 'model', text, messageDiv.innerHTML);
+            }
+            
             return messageDiv;
         }
+
+        // NEW: Function to add a save button below AI response if it's a learning path or quiz
+        function addSaveArtifactButton(aiMessageDiv, rawResponse, originalPrompt) {
+            let artifactType = null;
+            let artifactTitle = null;
+
+            // Check for Quiz block
+            const quizMatch = rawResponse.match(QUIZ_BLOCK_REGEX);
+            if (quizMatch) {
+                artifactType = 'quiz';
+                try {
+                    const cleanedQuizRaw = cleanJSON(quizMatch[0]); // Use full match including ```quiz```
+                    const parsableQuizRaw = cleanedQuizRaw.replace(/\\/g, '\\\\');
+                    const quizData = JSON.parse(parsableQuizRaw.replace('```quiz\n', '').replace('\n```', ''));
+                    // If it's an array of quizzes, try to get the title of the first one or a generic title
+                    if (Array.isArray(quizData) && quizData.length > 0) {
+                        artifactTitle = quizData[0].title || `Bài tập (${new Date().toLocaleDateString()})`;
+                    } else if (quizData.title) { // Single quiz object
+                        artifactTitle = quizData.title;
+                    } else {
+                         artifactTitle = `Bài tập (${new Date().toLocaleDateString()})`;
+                    }
+                } catch (e) {
+                    console.error("Error parsing quiz JSON for title:", e);
+                    artifactTitle = `Bài tập (${new Date().toLocaleDateString()})`;
+                }
+            } 
+            // Check for Learning Path (list of interactive links)
+            else if (rawResponse.match(LEARNING_PATH_REGEX)) {
+                artifactType = 'learning_path';
+                // Try to derive title from the original prompt if it was a "roadmap" request
+                if (originalPrompt && originalPrompt.toLowerCase().includes('lộ trình ôn tập')) {
+                    artifactTitle = originalPrompt.replace(/tạo|vẽ|cho tôi|giúp tôi|lên|một\s|về\s|chi tiết\s/gi, '').trim();
+                    if (artifactTitle.length > 50) artifactTitle = artifactTitle.substring(0, 47) + '...';
+                } else {
+                    artifactTitle = `Lộ trình học (${new Date().toLocaleDateString()})`;
+                }
+            }
+
+            if (artifactType) {
+                const saveButton = document.createElement('button');
+                saveButton.classList.add(
+                    'bg-purple-600', 'hover:bg-purple-700', 'text-white', 'font-semibold',
+                    'py-1', 'px-2', 'rounded-md', 'shadow-sm', 'text-sm', 'mt-2', 'mr-2', 'ml-auto' // float right
+                );
+                saveButton.textContent = `Lưu ${artifactType === 'learning_path' ? 'Lộ trình' : 'Bài tập'}`;
+                saveButton.addEventListener('click', async () => {
+                    saveButton.disabled = true;
+                    saveButton.textContent = 'Đang lưu...';
+                    await saveArtifactToFirestore(
+                        artifactTitle,
+                        artifactType,
+                        rawResponse, // Save the full raw text for re-rendering
+                        aiMessageDiv.innerHTML, // Save the rendered HTML as well
+                        originalPrompt
+                    );
+                    saveButton.textContent = 'Đã lưu!';
+                    saveButton.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                    saveButton.classList.add('bg-gray-400');
+                });
+                // Find the existing .chat-message div for the AI's response
+                // aiMessageDiv.appendChild(saveButton); // Append to the message div
+                // Better to add it after the message div, centered or aligned
+                const container = aiMessageDiv.parentNode;
+                const saveButtonWrapper = document.createElement('div');
+                saveButtonWrapper.classList.add('flex', 'justify-end', 'w-full', 'pr-2'); // Align right
+                container.insertBefore(saveButtonWrapper, aiMessageDiv.nextSibling); // Insert after the message
+                saveButtonWrapper.appendChild(saveButton);
+            }
+        }
+
 
         function extractAndReplaceQuizBlocks(text) {
             const extractedQuizzes = [];
@@ -826,6 +1235,8 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             if (!completedTopics.includes(decodedPrompt)) {
                 completedTopics.push(decodedPrompt);
                 linkElement.classList.add('completed-topic');
+                // NEW: Also save user data when a topic is completed
+                await saveUserDataToFirestore();
             }
 
             await callGeminiAPI(decodedPrompt);
@@ -845,8 +1256,12 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             }
 
             // Append user message and store its reference
-            const userMessageDiv = appendMessage(promptText, 'user-message');
+            const userMessageDiv = appendMessage(promptText, 'user-message', false); // User message is not loading
             lastUserMessageElement = userMessageDiv; // Store the reference to the user's message
+
+            // Save user message to Firestore immediately
+            saveMessageToFirestore(currentActiveTab, 'user', promptText, userMessageDiv.innerHTML);
+
 
             if (!promptOverride) {
                 promptInput.value = ''; 
@@ -908,6 +1323,15 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Full response text:", fullResponseBuffer);
 
+                // NEW: Save AI response to Firestore after full response is processed
+                saveMessageToFirestore(currentActiveTab, 'model', fullResponseBuffer, htmlContent);
+
+                // NEW: Add save artifact button if applicable (only for review tab)
+                if (currentActiveTab === 'review') {
+                    addSaveArtifactButton(aiLoadingMessageDiv, fullResponseBuffer, promptText);
+                }
+
+
             } catch (error) {
                 console.error("Lỗi khi gọi Gemini API:", error);
                 // Ensure spinner is removed and error message is displayed even if stream fails midway
@@ -931,15 +1355,22 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
 
         function switchTab(tabName) {
+            // NEW: Save current active tab when switching
+            if (currentActiveTab !== tabName && currentUserUid) {
+                saveUserDataToFirestore(); // Save previous state before switching
+            }
             currentActiveTab = tabName;
 
             solutionContent.classList.add('hidden');
             reviewContent.classList.add('hidden');
+            savedContent.classList.add('hidden'); // NEW: Hide saved content
 
             solutionTabBtn.classList.remove('text-blue-600', 'border-blue-600');
             solutionTabBtn.classList.add('text-gray-600', 'border-transparent');
             reviewTabBtn.classList.remove('text-blue-600', 'border-blue-600');
             reviewTabBtn.classList.add('text-gray-600', 'border-transparent');
+            savedTabBtn.classList.remove('text-blue-600', 'border-blue-600'); // NEW
+            savedTabBtn.classList.add('text-gray-600', 'border-transparent'); // NEW
 
             if (tabName === 'solution') {
                 solutionContent.classList.remove('hidden');
@@ -947,7 +1378,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 solutionTabBtn.classList.remove('text-gray-600', 'border-transparent');
                 currentChatSession = solutionChat;
                 currentContentContainerElement = solutionResponseContainer;
-                // Ensure placeholder visibility if no messages
+                // Ensure placeholder visibility if no messages and no child nodes
                 if (solutionResponseContainer.children.length === 0) {
                     solutionResponseContainer.innerHTML = `<p id="solutionPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Kết quả sẽ hiển thị ở đây...</p>`;
                 }
@@ -957,9 +1388,22 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 reviewTabBtn.classList.remove('text-gray-600', 'border-transparent');
                 currentChatSession = reviewChat;
                 currentContentContainerElement = reviewResponseContainer;
-                // Ensure placeholder visibility if no messages
+                // Ensure placeholder visibility if no messages and no child nodes
                 if (reviewResponseContainer.children.length === 0) {
                     reviewResponseContainer.innerHTML = `<p id="reviewPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Nhập yêu cầu để tạo lộ trình ôn tập hoặc câu hỏi...</p>`;
+                }
+            } else if (tabName === 'saved') { // NEW: Handle saved tab
+                savedContent.classList.remove('hidden');
+                savedTabBtn.classList.add('text-blue-600', 'border-blue-600');
+                savedTabBtn.classList.remove('text-gray-600', 'border-transparent');
+                currentChatSession = null; // No active chat session in saved tab
+                currentContentContainerElement = savedListContainer; // Initially show the list
+
+                // Always reload saved items when switching to this tab
+                if (currentUserUid) {
+                    loadSavedArtifactsList();
+                } else {
+                    savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Vui lòng đăng nhập để xem các mục đã lưu.</p>`;
                 }
             }
             
@@ -967,13 +1411,16 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
         }
 
-        // NEW: Add event listeners for auth buttons
+        // Add event listeners for auth buttons
         signInBtn.addEventListener('click', handleSignIn);
         signUpBtn.addEventListener('click', handleSignUp);
-        // NEW: Sign out button in header
+        // Sign out button in header
         signOutHeaderBtn.addEventListener('click', handleSignOut);
-        // NEW: Save session button
+        // Save session button
         saveSessionBtn.addEventListener('click', handleSaveSession);
+        // NEW: Saved tab button
+        savedTabBtn.addEventListener('click', () => switchTab('saved'));
+
 
         if (sendPromptButton) {
             sendPromptButton.addEventListener("click", () => callGeminiAPI(null));
@@ -999,6 +1446,9 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             const footerHeight = chatInputFooter.offsetHeight;
             solutionResponseContainer.style.paddingBottom = `${footerHeight + 20}px`; 
             reviewResponseContainer.style.paddingBottom = `${footerHeight + 20}px`;
+            // NEW: Add padding for saved content containers
+            savedListContainer.style.paddingBottom = `${footerHeight + 20}px`;
+            savedDetailContainer.style.paddingBottom = `${footerHeight + 20}px`;
             backToTopBtn.style.bottom = `${footerHeight + 20}px`;
         }
 
