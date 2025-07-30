@@ -336,10 +336,10 @@
         {
             "type": "multiple_choice",
             "title": "Câu hỏi về Đạo hàm",
-            "question": "Đạo hàm của hàm số y = x^3 là gì?",
-            "options": ["3x^2", "x^2", "3x"],
-            "answer": "3x^2",
-            "explanation": "Áp dụng công thức (x^n)' = n*x^(n-1), ta có (x^3)' = 3*x^(3-1) = 3x^2."
+            "question": "Đạo hàm của hàm số y = $x^3$ là gì?",
+            "options": ["$3x^2$", "$x^2$", "$3x$"],
+            "answer": "$3x^2$",
+            "explanation": "Áp dụng công thức $(x^n)' = n \\cdot x^{n-1}$, ta có $(x^3)' = 3 \\cdot x^{(3-1)} = 3x^2$."
         }
         \`\`\`
     * **Ví dụ định dạng đúng (MẢNG ĐỐI TƯỢNG):**
@@ -363,7 +363,7 @@
         ]
         \`\`\`
     * **Các loại quiz hỗ trợ:** "multiple_choice", "fill_in_the_blank", "short_answer", "flashcard".
-    * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là **văn bản thuần túy**, không chứa bất kỳ định dạng Markdown, HTML, hay ký tự đặc biệt nào khác ngoài các ký tự tiêu chuẩn trong JSON. Nếu có LaTeX, hãy đặt nó trực tiếp trong chuỗi mà không dùng dấu đô la.
+    * **Quan trọng:** Các giá trị chuỗi bên trong JSON phải là văn bản thuần túy. **Nếu có biểu thức toán học LaTeX, bạn PHẢI bao bọc chúng bằng dấu đô la (ví dụ: '$E=mc^2$' cho toán nội dòng hoặc '$$x^2+y^2=z^2$$' cho toán hiển thị) để MathJax có thể hiển thị.** Không sử dụng các định dạng Markdown hay HTML khác trong chuỗi JSON.
 4.  **Văn bản hỗ trợ:** Bạn có thể xen kẽ văn bản giải thích thông thường (Markdown) giữa các khối.
 5.  **Ngôn ngữ:** Luôn phản hồi bằng tiếng Việt.
 
@@ -467,10 +467,13 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             
             switch (quizJson.type) {
                 case 'multiple_choice':
-                    html += `<p class="mb-2">${quizJson.question || 'Câu hỏi bị thiếu'}</p>`;
+                    // No need to wrap with $ here, AI is instructed to do it if math is present
+                    const mcqQuestion = quizJson.question || 'Câu hỏi bị thiếu';
+                    html += `<p class="mb-2">${mcqQuestion}</p>`;
                     if (quizJson.options && Array.isArray(quizJson.options)) {
                         html += `<div class="space-y-2">`;
                         quizJson.options.forEach((opt, i) => {
+                             // No need to wrap each option with $ here
                              const optionText = (typeof opt === 'string' || typeof opt === 'number') ? opt : 'Lựa chọn không hợp lệ';
                              html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq-${quizIndex}" value="${i}" class="mr-2">${optionText}</label>`;
                         });
@@ -479,20 +482,36 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                         html += `<div class="text-red-500 text-sm my-2">Lỗi: Không tìm thấy các lựa chọn hoặc định dạng sai cho câu hỏi này.</div>`;
                         console.error('Lỗi dữ liệu Quiz: Thuộc tính "options" bị thiếu hoặc không phải là một mảng.', quizJson);
                     }
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    // No need to wrap answer and explanation with $ here
+                    const mcqAnswer = quizJson.answer || 'N/A';
+                    const mcqExplanation = quizJson.explanation || '';
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${mcqAnswer}<br><i>${mcqExplanation}</i></p></div>`;
                     break;
                 case 'fill_in_the_blank':
-                    html += `<p>${(quizJson.question || '').replace(/__+/g, '<input type="text" class="border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent">')}</p>`;
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    // No need to wrap question with $ here
+                    const fitbQuestion = quizJson.question || '';
+                    html += `<p>${fitbQuestion.replace(/__+/g, '<input type="text" class="border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent">')}</p>`;
+                    // No need to wrap answer and explanation with $ here
+                    const fitbAnswer = quizJson.answer || 'N/A';
+                    const fitbExplanation = quizJson.explanation || '';
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án đúng:</b> ${fitbAnswer}<br><i>${fitbExplanation}</i></p></div>`;
                     break;
                 case 'short_answer':
-                    html += `<p>${quizJson.question || 'Câu hỏi bị thiếu'}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
-                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${quizJson.answer || 'N/A'}<br><i>${quizJson.explanation || ''}</i></p></div>`;
+                    // No need to wrap question with $ here
+                    const saQuestion = quizJson.question || 'Câu hỏi bị thiếu';
+                    html += `<p>${saQuestion}</p><textarea class="w-full mt-2 p-2 border rounded-md"></textarea>`;
+                    // No need to wrap answer and explanation with $ here
+                    const saAnswer = quizJson.answer || 'N/A';
+                    const saExplanation = quizJson.explanation || '';
+                    html += `<div class="mt-3"><button class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm">Xem đáp án</button><p class="text-green-700 mt-2 hidden"><b>Đáp án gợi ý:</b> ${saAnswer}<br><i>${saExplanation}</i></p></div>`;
                     break;
                 case 'flashcard':
+                    // No need to wrap front and back with $ here
+                    const flashFront = quizJson.front || 'Mặt trước bị thiếu';
+                    const flashBack = quizJson.back || 'Mặt sau bị thiếu';
                     html += `<div class="flashcard bg-white p-4 border rounded shadow-sm text-center cursor-pointer">
-                                <div class="front"><p class="text-lg font-semibold">${quizJson.front || 'Mặt trước bị thiếu'}</p></div>
-                                <div class="back hidden"><p class="text-gray-700">${quizJson.back || 'Mặt sau bị thiếu'}</p></div>
+                                <div class="front"><p class="text-lg font-semibold">${flashFront}</p></div>
+                                <div class="back hidden"><p class="text-gray-700">${flashBack}</p></div>
                              </div>`;
                     break;
                 default:
@@ -650,7 +669,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 });
                 addQuizEventListeners(aiLoadingMessageDiv);
 
-                currentContentContainerElement.scrollTop = currentContentContainerElement.scrollHeight;
+                currentContentContainerElement.scrollTop = currentContentContainerElement.scrollTop; // Maintain current scroll
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Full response text:", fullResponseBuffer);
 
