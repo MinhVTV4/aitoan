@@ -178,7 +178,7 @@
 </head>
 <body class="flex flex-col min-h-screen items-center p-5">
     <h1 class="text-4xl font-extrabold text-blue-700 mb-4 text-center">Ứng dụng AI Toán học</h1>
-    <h2 class="text-lg text-gray-600 mb-8 text-center">(Sử dụng Gemini 1.5 Flash và MathJax)</h2>
+    <h2 class="text-lg text-gray-600 mb-8 text-center">(Sử dụng Gemini 2.5 Flash và MathJax)</h2>
 
     <!-- Main Chat Content Area -->
     <div class="flex-grow w-full max-w-7xl flex flex-col">
@@ -303,12 +303,10 @@
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
-        // ***FIX 1: Updated Regex to be more flexible***
         const QUIZ_BLOCK_REGEX = /```(?:quiz|json)\n([\s\S]*?)\n```/g;
         const INTERACTIVE_LINK_REGEX = /(?<!\]\()\B\[(.*?)\]\{(?:\"prompt\":\"(.*?)\")?\}/g;
         const BASIC_LINK_REGEX = /\[(.*?)\]/g;
 
-        // ***FIX 3: Updated System Prompt for clarity***
         const LEARNING_MODE_SYSTEM_PROMPT = `Bạn là một trợ lý ôn tập và học tập AI chuyên biệt trong lĩnh vực toán học. Mục tiêu của bạn là giúp người dùng ôn tập hiệu quả thông qua lộ trình học tập và các nội dung lý thuyết chi tiết.
 
 **Quy tắc phản hồi chính:**
@@ -317,8 +315,8 @@
     * **Ví dụ về liên kết lý thuyết (TUÂN THỦ NGHIÊM NGẶT):**
         * \`[Đạo hàm cơ bản]{"prompt":"Giải thích chi tiết về đạo hàm cơ bản, định nghĩa, công thức và ví dụ."}\`
         * \`[Số phức cơ bản]{"prompt":"Giải thích về số phức cơ bản, bao gồm định nghĩa, các phép toán và biểu diễn hình học."}\`
-2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown.
-    * **Định dạng khối mã PHẢI là:** Khối mã PHẢI bắt đầu bằng \`\`\`quiz trên một dòng riêng và kết thúc bằng \`\`\` trên một dòng riêng. TOÀN BỘ nội dung JSON phải nằm giữa hai dòng này.
+2.  **Tạo bài tập/quiz:** Nếu người dùng *trực tiếp* yêu cầu tạo câu hỏi hoặc bài tập, bạn PHẢI trả về một khối JSON hợp lệ được bao bọc trong khối mã Markdown. Nếu người dùng yêu cầu nhiều câu hỏi, bạn có thể trả về một mảng các đối tượng JSON.
+    * **Định dạng khối mã PHẢI là:** Khối mã PHẢI bắt đầu bằng \`\`\`quiz trên một dòng riêng và kết thúc bằng \`\`\` trên một dòng riêng. TOÀN BỘ nội dung JSON (một đối tượng hoặc một mảng các đối tượng) phải nằm giữa hai dòng này.
     * **Ví dụ định dạng đúng (TUÂN THỦ NGHIÊM NGẶT):**
         \`\`\`quiz
         {
@@ -350,7 +348,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
             model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-            console.log("Generative Model instance created with model 'gemini-1.5-flash-latest'!");
+            console.log("Generative Model instance created with model 'gemini-2.5-flash'!");
             
             solutionChat = model.startChat(); 
             console.log("Solution chat session started!");
@@ -391,7 +389,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         function extractAndReplaceQuizBlocks(text) {
             const extractedQuizzes = [];
             let quizIndex = 0;
-            // Use the updated, more flexible regex
             const cleanedText = text.replace(QUIZ_BLOCK_REGEX, (match, jsonContent) => {
                 extractedQuizzes.push(jsonContent.trim());
                 return `${QUIZ_PLACEHOLDER_PREFIX}${quizIndex++}`;
@@ -412,33 +409,22 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             return processedText;
         }
 
-        // ***FIX 2: Enhanced cleanJSON function***
-        /**
-         * Attempts to clean a raw JSON string to make it parsable.
-         * Handles common AI-generated errors like trailing commas.
-         * @param {string} jsonString The raw JSON string.
-         * @returns {string} The cleaned JSON string.
-         */
+        // ***FIX: Enhanced cleanJSON to handle bad escape characters***
         function cleanJSON(jsonString) {
             let cleaned = jsonString.trim();
-
-            // 1. Remove comments (if any) - not common but good practice
+            // Remove comments
             cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-
-            // 2. Replace smart quotes with straight quotes
+            // Replace smart quotes
             cleaned = cleaned.replace(/[“”‘’]/g, '"');
-            
-            // 3. Remove trailing commas from objects and arrays
-            // Matches a comma that is followed by optional whitespace and then a } or ]
+            // Remove trailing commas
             cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
-
+            // Escape unescaped backslashes that are not part of a valid escape sequence.
+            // This prevents errors when the AI includes single backslashes in strings (e.g., for LaTeX).
+            cleaned = cleaned.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
             return cleaned;
         }
 
         function renderQuiz(quizJson) {
-            if (!quizJson || !quizJson.type) {
-                return `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi: JSON của bài tập không hợp lệ.</div>`;
-            }
             let html = `<div class="quiz-block border border-blue-200 rounded-lg p-4 my-3 bg-blue-50">`;
             html += `<p class="font-bold text-blue-800 mb-2">${quizJson.title || 'Bài tập'}</p>`;
             switch (quizJson.type) {
@@ -447,7 +433,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     if (quizJson.options && Array.isArray(quizJson.options)) {
                         html += `<div class="space-y-2">`;
                         quizJson.options.forEach(opt => {
-                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq" class="mr-2">${opt}</label>`;
+                             html += `<label class="flex items-center p-2 border rounded-md hover:bg-blue-100 cursor-pointer"><input type="radio" name="mcq-${Math.random()}" class="mr-2">${opt}</label>`;
                         });
                         html += `</div>`;
                     }
@@ -478,14 +464,42 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             let finalHtml = htmlContent;
             extractedQuizzes.forEach((quizRaw, index) => {
                 const placeholder = `${QUIZ_PLACEHOLDER_PREFIX}${index}`;
-                let quizHtml = `<div class="bg-red-100 text-red-700 p-3 rounded-md my-2">Lỗi phân tích JSON quiz. AI có thể đã tạo sai định dạng.</div>`; 
+                let quizHtml = ''; // Initialize as empty string to accumulate HTML
 
                 try {
                     const cleanedQuizRaw = cleanJSON(quizRaw);
+                    if (!cleanedQuizRaw) {
+                        throw new Error("Khối quiz nhận được từ AI bị trống.");
+                    }
                     const quizJson = JSON.parse(cleanedQuizRaw);
-                    quizHtml = renderQuiz(quizJson);
+
+                    // Function to validate and render a single quiz object
+                    const validateAndRender = (quizObject) => {
+                        if (!quizObject || typeof quizObject !== 'object' || !quizObject.type) {
+                            throw new Error(`Đối tượng quiz không hợp lệ hoặc thiếu thuộc tính "type". Dữ liệu: <pre class="whitespace-pre-wrap text-xs">${JSON.stringify(quizObject, null, 2)}</pre>`);
+                        }
+                        return renderQuiz(quizObject);
+                    };
+
+                    // Check if the parsed JSON is an array or a single object
+                    if (Array.isArray(quizJson)) {
+                        // It's an array of quizzes, iterate and render each one
+                        quizJson.forEach(singleQuiz => {
+                            quizHtml += validateAndRender(singleQuiz);
+                        });
+                    } else {
+                        // It's a single quiz object
+                        quizHtml = validateAndRender(quizJson);
+                    }
+
                 } catch (e) {
-                    console.error(`Error parsing or rendering quiz ${index}:`, e, "Raw JSON:", quizRaw);
+                    console.error(`Lỗi khi xử lý quiz ${index}:`, e);
+                    // Display a more informative error message to the user
+                    quizHtml = `<div class="bg-red-100 text-red-800 p-4 rounded-lg my-2">
+                                    <p class="font-bold mb-2">Lỗi Xử Lý Bài Tập</p>
+                                    <p class="text-sm">AI có thể đã tạo ra định dạng không đúng. Vui lòng thử lại yêu cầu.</p>
+                                    <div class="mt-2 text-xs text-gray-700 bg-red-50 p-2 rounded"><b>Chi tiết lỗi:</b> ${e.message}</div>
+                                </div>`;
                 }
                 finalHtml = finalHtml.replace(placeholder, quizHtml);
             });
