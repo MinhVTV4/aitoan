@@ -317,6 +317,13 @@
             <!-- NEW: Saved Content (initially hidden) -->
             <div id="savedContent" class="flex-grow flex-col hidden">
                 <h3 class="text-2xl font-semibold text-gray-800 mb-3">Mục đã lưu</h3>
+                <!-- NEW: Saved Sub-tabs -->
+                <div id="savedSubTabs" class="flex border-b border-gray-200 mb-4 bg-white rounded-md shadow-sm">
+                    <button id="allSavedBtn" class="flex-1 px-4 py-2 text-md font-medium text-blue-600 border-b-2 border-blue-600 hover:bg-blue-50 focus:outline-none rounded-tl-md">Tất cả</button>
+                    <button id="solutionSavedBtn" class="flex-1 px-4 py-2 text-md font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none">Lời giải</button>
+                    <button id="reviewSavedBtn" class="flex-1 px-4 py-2 text-md font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none">Ôn tập</button>
+                    <button id="quizSavedBtn" class="flex-1 px-4 py-2 text-md font-medium text-gray-600 border-b-2 border-transparent hover:text-blue-600 hover:bg-blue-50 focus:outline-none rounded-tr-md">Bài tập</button>
+                </div>
                 <div id="savedListContainer" class="flex-grow p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 relative chat-container-content">
                     <p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>
                     <!-- Saved items will be dynamically added here -->
@@ -371,7 +378,7 @@
         // NEW: Import Firebase Authentication modules
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
         // NEW: Import Firebase Firestore modules
-        import { getFirestore, doc, setDoc, updateDoc, collection, query, orderBy, getDocs, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, updateDoc, collection, query, orderBy, getDocs, addDoc, serverTimestamp, getDoc, where } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 
         // Cấu hình Firebase của bạn (giữ nguyên như bạn đã cung cấp)
@@ -406,6 +413,12 @@
         const solutionResponseContainer = document.getElementById('solutionResponseContainer');
         const reviewResponseContainer = document.getElementById('reviewResponseContainer');
         // NEW: Saved Content Containers
+        const savedSubTabs = document.getElementById('savedSubTabs');
+        const allSavedBtn = document.getElementById('allSavedBtn');
+        const solutionSavedBtn = document.getElementById('solutionSavedBtn');
+        const reviewSavedBtn = document.getElementById('reviewSavedBtn');
+        const quizSavedBtn = document.getElementById('quizSavedBtn');
+
         const savedListContainer = document.getElementById('savedListContainer');
         const savedDetailContainer = document.getElementById('savedDetailContainer');
         const savedItemDetail = document.getElementById('savedItemDetail');
@@ -452,6 +465,7 @@
         let currentActiveTab = 'solution'; // Default active tab
         let completedTopics = []; // Stores prompts of completed learning topics
         let lastUserMessageElement = null; // Stores reference to the last user message element
+        let currentSavedFilter = 'all'; // NEW: Stores the current filter for the 'Saved' tab
 
         // Constants for quiz and interactive link processing
         const QUIZ_PLACEHOLDER_PREFIX = "QUIZ_PLACEHOLDER_";
@@ -523,7 +537,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             try {
                 await addDoc(collection(db, 'users', currentUserUid, 'saved_artifacts'), {
                     title: title,
-                    type: type,
+                    type: type, // 'solution', 'learning_path', 'quiz'
                     rawContent: rawContent,
                     htmlContent: htmlContent,
                     originalPrompt: originalPrompt,
@@ -644,7 +658,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
 
         // NEW: Function to load saved artifacts from Firestore
-        async function loadSavedArtifactsList() {
+        async function loadSavedArtifactsList(filterType = 'all') {
             if (!currentUserUid || !db) {
                 console.warn("Không thể tải mục đã lưu: Người dùng chưa đăng nhập hoặc Firestore chưa được khởi tạo.");
                 savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Vui lòng đăng nhập để xem các mục đã lưu.</p>`;
@@ -655,14 +669,41 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             savedDetailContainer.classList.add('hidden'); // Hide detail view
             savedListContainer.classList.remove('hidden'); // Show list container
 
+            // NEW: Update active sub-tab styling
+            [allSavedBtn, solutionSavedBtn, reviewSavedBtn, quizSavedBtn].forEach(btn => {
+                btn.classList.remove('text-blue-600', 'border-blue-600');
+                btn.classList.add('text-gray-600', 'border-transparent');
+            });
+            let activeBtn;
+            if (filterType === 'all') activeBtn = allSavedBtn;
+            else if (filterType === 'solution') activeBtn = solutionSavedBtn;
+            else if (filterType === 'learning_path') activeBtn = reviewSavedBtn;
+            else if (filterType === 'quiz') activeBtn = quizSavedBtn;
+
+            if (activeBtn) {
+                activeBtn.classList.add('text-blue-600', 'border-blue-600');
+                activeBtn.classList.remove('text-gray-600', 'border-transparent');
+            }
+
             const loadedArtifacts = [];
             try {
                 const artifactsRef = collection(db, 'users', currentUserUid, 'saved_artifacts');
-                const q = query(artifactsRef, orderBy('createdAt', 'desc'));
+                let q = query(artifactsRef, orderBy('createdAt', 'desc'));
+
+                // NEW: Apply filter based on filterType
+                if (filterType !== 'all') {
+                    q = query(artifactsRef, where('type', '==', filterType), orderBy('createdAt', 'desc'));
+                }
+                
                 const querySnapshot = await getDocs(q);
 
                 if (querySnapshot.empty) {
-                    savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>`;
+                    let msg = "Bạn chưa lưu mục nào.";
+                    if (filterType === 'solution') msg = "Bạn chưa lưu lời giải nào.";
+                    else if (filterType === 'learning_path') msg = "Bạn chưa lưu lộ trình ôn tập nào.";
+                    else if (filterType === 'quiz') msg = "Bạn chưa lưu bài tập nào.";
+
+                    savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">${msg}</p>`;
                     return;
                 }
 
@@ -679,7 +720,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     itemDiv.addEventListener('click', () => displaySavedArtifact(artifact));
                     savedListContainer.appendChild(itemDiv);
                 });
-                console.log("Mục đã lưu đã tải:", loadedArtifacts);
+                console.log(`Mục đã lưu (loại ${filterType}) đã tải:`, loadedArtifacts);
             } catch (e) {
                 console.error("Lỗi khi tải mục đã lưu từ Firestore:", e);
                 savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-red-500 text-center w-full mt-auto mb-auto">Lỗi khi tải mục đã lưu: ${e.message}</p>`;
@@ -752,12 +793,13 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 updateStatus('text-red-600', `Lỗi tải cài đặt: ${e.message}`);
             }
 
-            // --- IMPORTANT FIX: Set the active tab and content container BEFORE appending messages ---
-            // This ensures currentContentContainerElement is correctly set before messages are appended.
+            // --- IMPORTANT: Set the active tab and content container BEFORE re-initializing Gemini chat sessions ---
+            // This ensures currentChatSession and currentContentContainerElement are correctly set.
+            // UI of chat tabs will be cleared automatically on logout, and re-initialized as empty here.
             switchTab(currentActiveTab); 
 
             // --- Load Chat Histories (ONLY for re-initializing Gemini chat sessions, not for UI display) ---
-            // The UI will be empty based on the user's request, only explicitly saved items will be shown.
+            // This retrieves the raw chat history for Gemini's context, UI will be populated only by newly generated content.
             const loadedSolutionHistory = [];
             const loadedReviewHistory = [];
             
@@ -794,37 +836,19 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                     ]
                 });
 
-                // Re-apply completed topic styles after loading - this still makes sense as user progress
-                solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
+                // Re-apply completed topic styles after loading - this still makes sense as user progress is persistent
+                // This will apply styles if those interactive links are part of a *new* response from AI
+                // For this to apply to loaded UI, the UI would need to be re-rendered from rawText and preprocessed again.
+                // However, based on the previous discussion, we decided not to re-render old chat messages to keep UI clean.
+                // So, completed topics are only reflected on newly generated interactive links.
+                // This part of code below would ideally be in a re-render function if old messages were being displayed.
+                // For now, it will only affect newly generated interactive links.
+                document.querySelectorAll('.interactive-link').forEach(link => { // Re-select all interactive links on page (might be none on load if chat is cleared)
                     const decodedPrompt = decodeURIComponent(link.dataset.prompt);
                     if (completedTopics.includes(decodedPrompt)) {
                         link.classList.add('completed-topic');
                     }
                 });
-                reviewResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
-                    const decodedPrompt = decodeURIComponent(link.dataset.prompt);
-                    if (completedTopics.includes(decodedPrompt)) {
-                        link.classList.add('completed-topic');
-                    }
-                });
-
-
-                // Add event listeners for interactive links and quizzes to the re-rendered content
-                // (These will be for newly generated content, not loaded history)
-                solutionResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        handleLearningPromptClick(e.currentTarget);
-                    });
-                });
-                reviewResponseContainer.querySelectorAll('.interactive-link').forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        handleLearningPromptClick(e.currentTarget);
-                    });
-                });
-                addQuizEventListeners(solutionResponseContainer);
-                addQuizEventListeners(reviewResponseContainer);
 
                 updateStatus('text-green-600', "Dữ liệu phiên đã tải và sẵn sàng.");
 
@@ -860,9 +884,10 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 backToTopBtn.disabled = false;
 
                 updateStatus('text-blue-600', `Chào mừng ${user.email || 'người dùng'}. Đang tải phiên của bạn...`);
+                
                 // Call load function after successful login
                 await loadUserDataAndChats(); 
-                await loadSavedArtifactsList(); // Load saved items too
+                await loadSavedArtifactsList(currentSavedFilter); // Load saved items with current filter
                 updateStatus('text-green-600', `Chào mừng ${user.email || 'người dùng'}. Sẵn sàng gửi yêu cầu.`);
                 
             } else {
@@ -894,6 +919,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Bạn chưa lưu mục nào. Hãy lưu các lộ trình hoặc bài tập từ tab "Ôn tập"!</p>`;
                 savedDetailContainer.classList.add('hidden'); // Ensure detail view is hidden
                 completedTopics = []; // Clear completed topics
+                currentSavedFilter = 'all'; // Reset saved filter on logout
 
                 updateStatus('text-gray-600', "Bạn cần đăng nhập để bắt đầu.");
                 switchTab('solution'); // Default to solution tab and clear it
@@ -928,20 +954,20 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         }
 
         // Modified appendMessage to optionally save to Firestore
-        function appendMessage(text, senderType, isLoading = false) { // Removed saveToFirestore parameter
+        function appendMessage(text, senderType, isLoading = false) { 
             // Determine which placeholder to check based on currentContentContainerElement
             let placeholderEl = null;
-            if (currentContentContainerElement === solutionResponseContainer && solutionPlaceholder) {
+            if (currentContentContainerElement === solutionResponseContainer && solutionPlaceholder && solutionPlaceholder.parentNode) {
                 placeholderEl = solutionPlaceholder;
-            } else if (currentContentContainerElement === reviewResponseContainer && reviewPlaceholder) {
+            } else if (currentContentContainerElement === reviewResponseContainer && reviewPlaceholder && reviewPlaceholder.parentNode) {
                 placeholderEl = reviewPlaceholder;
-            } else if (currentContentContainerElement === savedListContainer && savedPlaceholder) { // For saved list
+            } else if (currentContentContainerElement === savedListContainer && savedPlaceholder && savedPlaceholder.parentNode) { 
                 placeholderEl = savedPlaceholder;
-            } else if (currentContentContainerElement === savedItemDetail) { // For saved item detail
+            } else if (currentContentContainerElement === savedItemDetail) {
                 // No placeholder to remove here
             }
 
-            if (placeholderEl && placeholderEl.parentNode === currentContentContainerElement) {
+            if (placeholderEl) {
                 placeholderEl.remove();
             }
             
@@ -978,9 +1004,8 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             if (quizMatch) {
                 artifactType = 'quiz';
                 try {
-                    const cleanedQuizRaw = cleanJSON(quizMatch[0]); // Use full match including ```quiz```
-                    const parsableQuizRaw = cleanedQuizRaw.replace(/\\/g, '\\\\');
-                    const quizData = JSON.parse(parsableQuizRaw.replace('```quiz\n', '').replace('\n```', ''));
+                    const parsedQuizContent = quizMatch[0].replace('```quiz\n', '').replace('```', '').trim();
+                    const quizData = JSON.parse(cleanJSON(parsedQuizContent));
                     // If it's an array of quizzes, try to get the title of the first one or a generic title
                     if (Array.isArray(quizData) && quizData.length > 0) {
                         artifactTitle = quizData[0].title || `Bài tập (${new Date().toLocaleDateString()})`;
@@ -1255,7 +1280,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
             const userMessageDiv = appendMessage(promptText, 'user-message', false); // User message is not loading
             lastUserMessageElement = userMessageDiv; // Store the reference to the user's message
 
-            // NO LONGER AUTOMATICALLY SAVE USER MESSAGES TO FIRESTORE
+            // NO LONGER AUTOMATICALLY SAVE USER MESSAGES TO FIRESTORE (only save artifacts)
             // saveMessageToFirestore(currentActiveTab, 'user', promptText, userMessageDiv.innerHTML);
 
 
@@ -1318,9 +1343,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
                 currentContentContainerElement.scrollTop = currentContentContainerElement.scrollTop; // Maintain current scroll
                 updateStatus('text-green-600', "Đã nhận phản hồi từ Gemini.");
                 console.log("Full response text:", fullResponseBuffer);
-
-                // NO LONGER AUTOMATICALLY SAVE AI MESSAGES TO FIRESTORE
-                // saveMessageToFirestore(currentActiveTab, 'model', fullResponseBuffer, htmlContent);
 
                 // NEW: Add save artifact button if applicable
                 if (currentActiveTab === 'review') {
@@ -1399,7 +1421,7 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
 
                 // Always reload saved items when switching to this tab
                 if (currentUserUid) {
-                    loadSavedArtifactsList();
+                    loadSavedArtifactsList(currentSavedFilter); // Load saved items with current filter
                 } else {
                     savedListContainer.innerHTML = `<p id="savedPlaceholder" class="text-gray-500 text-center w-full mt-auto mb-auto">Vui lòng đăng nhập để xem các mục đã lưu.</p>`;
                 }
@@ -1418,6 +1440,11 @@ Hãy tuân thủ nghiêm ngặt các quy tắc trên để đảm bảo trải n
         saveSessionBtn.addEventListener('click', handleSaveSession);
         // NEW: Saved tab button
         savedTabBtn.addEventListener('click', () => switchTab('saved'));
+        // NEW: Saved sub-tab buttons
+        allSavedBtn.addEventListener('click', () => { currentSavedFilter = 'all'; loadSavedArtifactsList('all'); });
+        solutionSavedBtn.addEventListener('click', () => { currentSavedFilter = 'solution'; loadSavedArtifactsList('solution'); });
+        reviewSavedBtn.addEventListener('click', () => { currentSavedFilter = 'learning_path'; loadSavedArtifactsList('learning_path'); });
+        quizSavedBtn.addEventListener('click', () => { currentSavedFilter = 'quiz'; loadSavedArtifactsList('quiz'); });
 
 
         if (sendPromptButton) {
